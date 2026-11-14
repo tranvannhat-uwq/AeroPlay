@@ -11,9 +11,12 @@ import androidx.room.RoomDatabase
         PlaylistVideoEntity::class,
         PlaybackPositionEntity::class,
         SearchHistoryEntity::class,
-        DeviceVideoEntity::class
+        DeviceVideoEntity::class,
+        RecommendationFeedbackEntity::class,
+        BlockedRecommendationChannelEntity::class,
+        RecommendationImpressionEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AeroPlayDatabase : RoomDatabase() {

@@ -216,6 +216,7 @@ fun VideoFeedCard(
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
     onAddToPlaylist: () -> Unit,
+    recommendationActions: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val statusColors = LocalAeroPlayStatusColors.current
@@ -361,6 +362,8 @@ fun VideoFeedCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+
+                recommendationActions?.invoke()
             }
         }
     }

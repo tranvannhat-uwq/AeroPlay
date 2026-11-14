@@ -5,6 +5,7 @@ import com.aeroplay.app.core.database.SearchHistoryEntity
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaybackQueue
 import com.aeroplay.app.core.model.SearchResultBundle
+import com.aeroplay.app.core.model.SearchContentType
 import com.aeroplay.app.core.model.SourceError
 import com.aeroplay.app.core.model.VideoDetail
 import com.aeroplay.app.core.model.VideoItem
@@ -49,13 +50,14 @@ class SearchRepositoryImpl @Inject constructor(
     override suspend fun search(
         query: String,
         pageToken: Any?,
-        sourceOverride: ContentSourceType?
+        sourceOverride: ContentSourceType?,
+        contentType: SearchContentType
     ): Result<SearchResultBundle> {
         val activeSource = sourceOverride ?: settingsRepository.getSettingsSnapshot().activeSourceType
         SourceDiagnostics.event("search.repository", "source=$activeSource next=${pageToken != null}")
         return when (activeSource) {
             ContentSourceType.DEMO_LOCAL -> Result.success(demoSource.search(query))
-            ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.search(query, pageToken)
+            ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.search(query, pageToken, contentType)
             ContentSourceType.DEVICE_LOCAL -> Result.success(SearchResultBundle(query = query, sourceType = activeSource))
         }
     }

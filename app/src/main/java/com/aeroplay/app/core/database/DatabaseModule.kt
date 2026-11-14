@@ -25,6 +25,23 @@ object DatabaseModule {
         }
     }
 
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE watch_history ADD COLUMN totalWatchedMs INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE watch_history ADD COLUMN completedPlayCount INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS recommendation_feedback (
+                videoId TEXT NOT NULL PRIMARY KEY, feedbackType TEXT NOT NULL,
+                channelName TEXT NOT NULL, updatedAtEpochMs INTEGER NOT NULL)""")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS blocked_recommendation_channels (
+                normalizedChannelName TEXT NOT NULL PRIMARY KEY, displayName TEXT NOT NULL,
+                blockedAtEpochMs INTEGER NOT NULL)""")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS recommendation_impressions (
+                videoId TEXT NOT NULL PRIMARY KEY, channelName TEXT NOT NULL,
+                impressionCount INTEGER NOT NULL, clickCount INTEGER NOT NULL,
+                lastImpressedAtEpochMs INTEGER NOT NULL, lastClickedAtEpochMs INTEGER NOT NULL)""")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AeroPlayDatabase {
@@ -32,7 +49,7 @@ object DatabaseModule {
             context,
             AeroPlayDatabase::class.java,
             "aeroplay_local.db"
-        ).addMigrations(MIGRATION_1_2).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
     }
 
     @Provides

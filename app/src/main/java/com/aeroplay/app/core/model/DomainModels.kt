@@ -20,6 +20,10 @@ enum class ContentSourceType(val displayName: String, val isExperimental: Boolea
     }
 }
 
+enum class SearchContentType(val extractorFilter: String) {
+    ALL("all"), VIDEO("videos"), CHANNEL("channels"), PLAYLIST("playlists")
+}
+
 enum class DeliveryType {
     PROGRESSIVE,
     HLS,
@@ -39,7 +43,8 @@ data class VideoItem(
     val viewCount: Long = -1L,
     val uploadedText: String = "",
     val isLive: Boolean = false,
-    val sourceType: ContentSourceType = ContentSourceType.DEMO_LOCAL
+    val sourceType: ContentSourceType = ContentSourceType.DEMO_LOCAL,
+    val publishedAtEpochMs: Long? = null
 )
 
 data class StreamVariant(

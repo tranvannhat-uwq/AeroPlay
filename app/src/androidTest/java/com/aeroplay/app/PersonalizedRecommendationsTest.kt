@@ -23,11 +23,11 @@ class PersonalizedRecommendationsTest {
 
     @Test fun openCatalogSuggestionsUseHistoryWithoutRepeatingWatchedVideo() = runBlocking<Unit> {
         val video = graph.content().getHomeFeed(ContentSourceType.DEMO_LOCAL).getOrThrow().first { it.id == "demo_sintel" }
-        val result = graph.recommendations().recommendations(listOf(history(video)), ContentSourceType.DEMO_LOCAL)
+        val result = graph.recommendations().recommendations(listOf(history(video)), emptyList(), emptyList(), emptyList(), ContentSourceType.DEMO_LOCAL)
         assertTrue(result.message, result.videos.isNotEmpty())
         assertFalse(result.videos.any { it.id == video.id })
         assertTrue(result.videos.all { it.sourceType == ContentSourceType.DEMO_LOCAL })
-        assertTrue(graph.recommendations().recommendations(emptyList(), ContentSourceType.DEMO_LOCAL).videos.isEmpty())
+        assertTrue(graph.recommendations().recommendations(emptyList(), emptyList(), emptyList(), emptyList(), ContentSourceType.DEMO_LOCAL).videos.isEmpty())
     }
 
     @Test fun realYouTubeSuggestionsComeFromTheExtractor() = runBlocking<Unit> {
@@ -37,7 +37,7 @@ class PersonalizedRecommendationsTest {
         val seed = VideoItem(detail.id, url, detail.title, detail.channelName,
             thumbnailUrl = detail.thumbnailUrl, durationSeconds = detail.durationSeconds,
             sourceType = ContentSourceType.EXPERIMENTAL_EXTRACTOR)
-        val result = graph.recommendations().recommendations(listOf(history(seed)), ContentSourceType.EXPERIMENTAL_EXTRACTOR)
+        val result = graph.recommendations().recommendations(listOf(history(seed)), emptyList(), emptyList(), emptyList(), ContentSourceType.EXPERIMENTAL_EXTRACTOR)
         assertTrue(result.message, result.videos.isNotEmpty())
         assertTrue(result.videos.all { it.sourceType == ContentSourceType.EXPERIMENTAL_EXTRACTOR && it.id != seed.id })
         Log.i("AeroPlayTest", "PERSONALIZED_YOUTUBE_REAL_RESULTS count=${result.videos.size}")

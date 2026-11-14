@@ -22,7 +22,9 @@ data class HistoryEntity(
     val lastPositionMs: Long = 0L,
     val totalDurationMs: Long = 0L,
     val watchedAtEpochMs: Long = System.currentTimeMillis(),
-    val playCount: Int = 1
+    val playCount: Int = 1,
+    val totalWatchedMs: Long = 0L,
+    val completedPlayCount: Int = 0
 ) {
     fun toVideoItem(): VideoItem = VideoItem(
         id = videoId,
@@ -141,4 +143,29 @@ data class DeviceVideoEntity(
     val height: Int,
     val sizeBytes: Long,
     val importedAtEpochMs: Long
+)
+
+@Entity(tableName = "recommendation_feedback")
+data class RecommendationFeedbackEntity(
+    @PrimaryKey val videoId: String,
+    val feedbackType: String,
+    val channelName: String,
+    val updatedAtEpochMs: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "blocked_recommendation_channels")
+data class BlockedRecommendationChannelEntity(
+    @PrimaryKey val normalizedChannelName: String,
+    val displayName: String,
+    val blockedAtEpochMs: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "recommendation_impressions")
+data class RecommendationImpressionEntity(
+    @PrimaryKey val videoId: String,
+    val channelName: String,
+    val impressionCount: Int = 0,
+    val clickCount: Int = 0,
+    val lastImpressedAtEpochMs: Long = 0L,
+    val lastClickedAtEpochMs: Long = 0L
 )

@@ -25,6 +25,7 @@ import org.schabi.newpipe.extractor.MediaFormat
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
+import com.aeroplay.app.core.model.SearchContentType
 import org.schabi.newpipe.extractor.StreamingService
 import org.schabi.newpipe.extractor.channel.ChannelInfoItem
 import org.schabi.newpipe.extractor.exceptions.AgeRestrictedContentException
@@ -101,7 +102,8 @@ class ExperimentalExtractorSource @Inject constructor(
 
     suspend fun search(
         query: String,
-        pageToken: Any? = null
+        pageToken: Any? = null,
+        contentType: SearchContentType = SearchContentType.ALL
     ): Result<SearchResultBundle> = executeWithRetry("search") {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) {
@@ -125,7 +127,11 @@ class ExperimentalExtractorSource @Inject constructor(
                 correctedQuery = null
             )
         } else {
-            val queryHandler = service.searchQHFactory.fromQuery(trimmed)
+            val queryHandler = service.searchQHFactory.fromQuery(
+                trimmed,
+                listOf(contentType.extractorFilter),
+                ""
+            )
             val searchInfo = SearchInfo.getInfo(service, queryHandler)
             if (searchInfo.relatedItems.isEmpty() && searchInfo.errors.isNotEmpty()) {
                 throw ExtractionException("Search items could not be extracted", searchInfo.errors.first())
@@ -319,7 +325,8 @@ class ExperimentalExtractorSource @Inject constructor(
             viewCount = viewCount,
             uploadedText = textualUploadDate.orEmpty(),
             isLive = live,
-            sourceType = ContentSourceType.EXPERIMENTAL_EXTRACTOR
+            sourceType = ContentSourceType.EXPERIMENTAL_EXTRACTOR,
+            publishedAtEpochMs = uploadDate?.instant?.toEpochMilli()
         )
     }
 

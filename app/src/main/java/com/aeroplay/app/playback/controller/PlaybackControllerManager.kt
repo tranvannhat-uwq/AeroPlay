@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -79,6 +80,11 @@ class PlaybackControllerManager @Inject constructor(
     private var hasAttemptedProgressiveFallback = false
     private var lastPersistedSecond = -1L
     private var historyRecordedForSelection = false
+    private var completionRecordedForSelection = false
+    private var lastSamplePositionMs = -1L
+    private var lastSampleRealtimeMs = -1L
+    private var sessionWatchedMs = 0L
+    private var pendingWatchedMs = 0L
 
     init {
         connectSession()
@@ -146,6 +152,11 @@ class PlaybackControllerManager @Inject constructor(
                     )
                 }
                 if (!isPlaying) {
+                    _playbackState.value.currentVideo?.let { video ->
+                        flushWatchedDuration(video.id, controller.duration.coerceAtLeast(0L), controller.currentPosition.coerceAtLeast(0L))
+                    }
+                    lastSamplePositionMs = -1L
+                    lastSampleRealtimeMs = -1L
                     persistCurrentPosition()
                 } else {
                     val state = _playbackState.value
@@ -156,6 +167,8 @@ class PlaybackControllerManager @Inject constructor(
                         val duration = controller.duration.coerceAtLeast(0L)
                         scope.launch { historyRepository.recordWatchAndPosition(video, position, duration) }
                     }
+                    lastSamplePositionMs = controller.currentPosition.coerceAtLeast(0L)
+                    lastSampleRealtimeMs = SystemClock.elapsedRealtime()
                 }
             }
 
@@ -174,6 +187,16 @@ class PlaybackControllerManager @Inject constructor(
 
                 if (playbackState == Player.STATE_ENDED) {
                     persistCurrentPosition()
+                    val video = _playbackState.value.currentVideo
+                    val durationMs = controller.duration.takeIf { it > 0L }
+                        ?: ((_playbackState.value.currentDetail?.durationSeconds ?: 0L) * 1000L)
+                    if (video != null) flushWatchedDuration(video.id, durationMs, controller.currentPosition.coerceAtLeast(0L))
+                    if (!completionRecordedForSelection && video != null && durationMs > 0L &&
+                        sessionWatchedMs >= durationMs * COMPLETION_THRESHOLD
+                    ) {
+                        completionRecordedForSelection = true
+                        scope.launch { historyRepository.recordCompletion(video.id) }
+                    }
                     if (playbackRepository.activeQueue.value.hasNext) {
                         playNext()
                     }
@@ -229,6 +252,29 @@ class PlaybackControllerManager @Inject constructor(
                     val dur = controller.duration.takeIf { it > 0L }
                         ?: ((_playbackState.value.currentDetail?.durationSeconds ?: 0L) * 1000L)
                     val buf = controller.bufferedPosition.coerceAtLeast(0L)
+                    if (controller.isPlaying) {
+                        val video = _playbackState.value.currentVideo
+                        val now = SystemClock.elapsedRealtime()
+                        if (video != null && controller.currentMediaItem?.mediaId == video.id &&
+                            lastSamplePositionMs >= 0L && lastSampleRealtimeMs >= 0L
+                        ) {
+                            val wallDelta = (now - lastSampleRealtimeMs).coerceAtLeast(0L)
+                            val playbackDelta = pos - lastSamplePositionMs
+                            val plausibleMaximum = wallDelta * MAXIMUM_TRACKING_SPEED + SEEK_TOLERANCE_MS
+                            if (playbackDelta in 1L..plausibleMaximum) {
+                                sessionWatchedMs += playbackDelta
+                                pendingWatchedMs += playbackDelta
+                                if (pendingWatchedMs >= MIN_PERSISTED_WATCH_DELTA_MS) {
+                                    flushWatchedDuration(video.id, dur, pos)
+                                }
+                            }
+                        }
+                        lastSamplePositionMs = pos
+                        lastSampleRealtimeMs = now
+                    } else {
+                        lastSamplePositionMs = -1L
+                        lastSampleRealtimeMs = -1L
+                    }
                     _playbackState.update {
                         it.copy(
                             currentPositionMs = pos,
@@ -266,9 +312,23 @@ class PlaybackControllerManager @Inject constructor(
             return
         }
 
+        _playbackState.value.currentVideo?.let { previous ->
+            val previousDuration = mediaController?.duration?.coerceAtLeast(0L)
+                ?: ((_playbackState.value.currentDetail?.durationSeconds ?: 0L) * 1000L)
+            flushWatchedDuration(
+                previous.id,
+                previousDuration,
+                mediaController?.currentPosition?.coerceAtLeast(0L) ?: _playbackState.value.currentPositionMs
+            )
+        }
         persistCurrentPosition()
         extractionJob?.cancel()
         historyRecordedForSelection = false
+        completionRecordedForSelection = false
+        lastSamplePositionMs = -1L
+        lastSampleRealtimeMs = -1L
+        sessionWatchedMs = 0L
+        pendingWatchedMs = 0L
         lastPersistedSecond = -1L
         hasAttemptedProgressiveFallback = false
 
@@ -397,6 +457,20 @@ class PlaybackControllerManager @Inject constructor(
                 }
             )
         }
+    }
+
+    private companion object {
+        const val COMPLETION_THRESHOLD = 0.8
+        const val MAXIMUM_TRACKING_SPEED = 3L
+        const val SEEK_TOLERANCE_MS = 750L
+        const val MIN_PERSISTED_WATCH_DELTA_MS = 5_000L
+    }
+
+    private fun flushWatchedDuration(videoId: String, durationMs: Long, positionMs: Long) {
+        val delta = pendingWatchedMs.coerceAtMost(10_000L)
+        if (delta <= 0L) return
+        pendingWatchedMs = 0L
+        scope.launch { historyRepository.recordWatchedDuration(videoId, delta, durationMs, positionMs) }
     }
 
     private fun applyResolvedStream(

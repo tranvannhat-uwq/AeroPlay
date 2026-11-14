@@ -27,6 +27,10 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,6 +50,16 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -86,6 +100,7 @@ fun HomeScreen(
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     val savedPositions by viewModel.savedPositions.collectAsStateWithLifecycle()
+    val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val refreshState = rememberPullToRefreshState()
     val floatingInset = LocalFloatingPlayerInset.current
@@ -225,7 +240,19 @@ fun HomeScreen(
                 }
             }
 
-            // Recommendations based on viewing history.
+            if (continueWatching.isNotEmpty()) {
+                item {
+                    HorizontalVideoCarouselSection(
+                        title = "Tiếp tục xem",
+                        icon = Icons.Filled.History,
+                        videos = continueWatching,
+                        savedPositions = savedPositions,
+                        onVideoClick = { video -> viewModel.playVideo(video, continueWatching, "Tiếp tục xem") }
+                    )
+                }
+            }
+
+            // Recommendations from local history, favorites and recent searches.
             if (personalized.videos.isNotEmpty()) {
                 item {
                     HorizontalVideoCarouselSection(
@@ -233,6 +260,8 @@ fun HomeScreen(
                         icon = Icons.Filled.AutoAwesome,
                         videos = personalized.videos,
                         savedPositions = savedPositions,
+                        onRecommendationImpression = viewModel::recordRecommendationImpression,
+                        onRecommendationAction = viewModel::actOnRecommendation,
                         onVideoClick = { video ->
                             viewModel.playVideo(video, personalized.videos, "Dành cho bạn")
                         }
@@ -284,7 +313,7 @@ fun HomeScreen(
                 ) {
                     Text(
                         text = if (settings.activeSourceType.isExperimental) {
-                            "Đề xuất thịnh hành (Extractor)"
+                            "Khám phá trên YouTube (Extractor)"
                         } else {
                             "Video Chuẩn Mở Đề Xuất"
                         },
@@ -363,6 +392,9 @@ fun HomeScreen(
                             },
                             onToggleFavorite = { viewModel.toggleFavorite(video) },
                             onAddToPlaylist = { playlistTargetVideo = video },
+                            recommendationActions = {
+                                RecommendationActionsMenu(video, viewModel::actOnRecommendation)
+                            },
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
                     }
@@ -378,7 +410,9 @@ private fun HorizontalVideoCarouselSection(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     videos: List<VideoItem>,
     savedPositions: Map<String, PlaybackPosition>,
-    onVideoClick: (VideoItem) -> Unit
+    onVideoClick: (VideoItem) -> Unit,
+    onRecommendationImpression: ((VideoItem) -> Unit)? = null,
+    onRecommendationAction: ((VideoItem, RecommendationAction) -> Unit)? = null
 ) {
     val statusColors = LocalAeroPlayStatusColors.current
 
@@ -411,75 +445,142 @@ private fun HorizontalVideoCarouselSection(
         ) {
             items(videos, key = { "${title}_${it.id}" }) { video ->
                 val progress = savedPositions[video.id]?.progressFraction ?: 0f
-                Card(
-                    modifier = Modifier
-                        .width(210.dp)
-                        .clickable { onVideoClick(video) },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                ) {
-                    Column {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            AsyncImage(
-                                model = video.thumbnailUrl,
-                                contentDescription = video.title,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                            Surface(
+                val cardContent: @Composable () -> Unit = {
+                    Card(
+                        modifier = Modifier
+                            .width(210.dp)
+                            .clickable { onVideoClick(video) },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Column {
+                            Box(
                                 modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(6.dp),
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color.Black.copy(alpha = 0.80f)
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 9f)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                             ) {
+                                AsyncImage(
+                                    model = video.thumbnailUrl,
+                                    contentDescription = video.title,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Surface(
+                                    modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = Color.Black.copy(alpha = 0.80f)
+                                ) {
+                                    Text(
+                                        text = FormatUtils.formatDuration(video.durationSeconds),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                                if (progress > 0.01f) {
+                                    LinearProgressIndicator(
+                                        progress = { progress.coerceIn(0f, 1f) },
+                                        modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.BottomCenter),
+                                        color = statusColors.playButton,
+                                        trackColor = Color.White.copy(alpha = 0.3f)
+                                    )
+                                }
+                                if (onRecommendationAction != null) {
+                                    Box(Modifier.align(Alignment.TopEnd).padding(3.dp)) {
+                                        RecommendationActionsMenu(video, onRecommendationAction)
+                                    }
+                                }
+                            }
+                            Column(modifier = Modifier.padding(10.dp)) {
                                 Text(
-                                    text = FormatUtils.formatDuration(video.durationSeconds),
+                                    text = video.title,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = video.channelName,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            if (progress > 0.01f) {
-                                LinearProgressIndicator(
-                                    progress = { progress.coerceIn(0f, 1f) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(3.dp)
-                                        .align(Alignment.BottomCenter),
-                                    color = statusColors.playButton,
-                                    trackColor = Color.White.copy(alpha = 0.3f)
-                                )
-                            }
-                        }
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(
-                                text = video.title,
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = video.channelName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
                         }
                     }
+                }
+                if (onRecommendationImpression != null) {
+                    RecommendationVisibilityTracker(video, onRecommendationImpression) { cardContent() }
+                } else {
+                    cardContent()
                 }
             }
         }
     }
+}
+
+@Composable
+private fun RecommendationActionsMenu(
+    video: VideoItem,
+    onAction: (VideoItem, RecommendationAction) -> Unit
+) {
+    var expanded by remember(video.id) { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "Thao tác đề xuất", tint = MaterialTheme.colorScheme.onSurface)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            listOf(
+                RecommendationAction.NOT_INTERESTED to "Không quan tâm",
+                RecommendationAction.BLOCK_CHANNEL to "Không đề xuất kênh này",
+                RecommendationAction.MARK_WATCHED to "Đã xem",
+                RecommendationAction.WATCH_LATER to "Xem sau"
+            ).forEach { (action, label) ->
+                DropdownMenuItem(
+                    text = { Text(label) },
+                    onClick = {
+                        expanded = false
+                        onAction(video, action)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationVisibilityTracker(
+    video: VideoItem,
+    onImpression: (VideoItem) -> Unit,
+    content: @Composable () -> Unit
+) {
+    val view = LocalView.current
+    val latestCallback by rememberUpdatedState(onImpression)
+    var visibleFraction by remember(video.id) { mutableFloatStateOf(0f) }
+    LaunchedEffect(video.id) {
+        snapshotFlow { visibleFraction >= 0.5f }
+            .distinctUntilChanged()
+            .collectLatest { isVisibleEnough ->
+                if (isVisibleEnough) {
+                    delay(1_000L)
+                    if (visibleFraction >= 0.5f) latestCallback(video)
+                }
+            }
+    }
+    Box(modifier = Modifier.onGloballyPositioned { coordinates ->
+        val bounds = coordinates.boundsInWindow()
+        val screenWidth = view.rootView.width.toFloat()
+        val screenHeight = view.rootView.height.toFloat()
+        visibleFraction = if (bounds.width > 0f && bounds.height > 0f && screenWidth > 0f && screenHeight > 0f) {
+            val visibleWidth = (minOf(bounds.right, screenWidth) - maxOf(bounds.left, 0f)).coerceAtLeast(0f)
+            val visibleHeight = (minOf(bounds.bottom, screenHeight) - maxOf(bounds.top, 0f)).coerceAtLeast(0f)
+            ((visibleWidth * visibleHeight) / (bounds.width * bounds.height)).coerceIn(0f, 1f)
+        } else 0f
+    }) { content() }
 }
 
 @Composable

@@ -1,3 +1,14 @@
+AeroPlay 2.0.0
+
+- Tìm kiếm hiểu truy vấn tiếng Việt có dấu/không dấu và nhận diện ý định mới nhất, phổ biến, âm nhạc, kênh, playlist, tên riêng.
+- Xếp hạng cục bộ theo mức khớp trước; dùng ngày đăng và lượt xem thật khi NewPipe cung cấp. Có lọc nội dung, sắp xếp và lọc khoảng thời gian trên kết quả đã tải.
+- Phân trang giữ thứ tự những mục đã xem và loại video trùng theo nguồn + ID.
+- Đề xuất học trên thiết bị từ lịch sử, thời lượng xem, video xem gần hết, yêu thích, playlist, tìm kiếm và phản hồi; thêm Tiếp tục xem, Không quan tâm, chặn kênh, Đã xem, Xem sau.
+- Cập nhật Room không xóa dữ liệu cũ; Đặt lại lịch sử cá nhân hóa giữ nguyên yêu thích và playlist.
+- Bản này không dùng máy chủ hoặc API trả phí. Nguồn YouTube vẫn phụ thuộc khả năng truy cập của NewPipe.
+
+Cài đè bản cũ để tiếp tục dùng lịch sử, yêu thích, danh sách phát và cài đặt hiện có. Android 8 trở lên.
+
 AeroPlay 1.2.1
 
 - Khi xem ngang, video phủ toàn màn hình và ẩn thanh trạng thái, thanh điều hướng; vuốt từ cạnh để hiện thanh tạm thời. Quay dọc hoặc thu nhỏ trình phát sẽ khôi phục thanh hệ thống.

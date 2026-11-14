@@ -7,8 +7,7 @@ import coil.imageLoader
 import com.aeroplay.app.core.model.AppSettings
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.ThemeMode
-import com.aeroplay.app.data.repository.HistoryRepository
-import com.aeroplay.app.data.repository.SearchRepository
+import com.aeroplay.app.data.repository.PersonalizedRecommendations
 import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.updates.AppUpdateManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,8 +26,7 @@ import javax.inject.Inject
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
-    private val historyRepository: HistoryRepository,
-    private val searchRepository: SearchRepository,
+    private val personalizedRecommendations: PersonalizedRecommendations,
     val appUpdates: AppUpdateManager
 ) : ViewModel() {
 
@@ -99,9 +97,8 @@ class SettingsViewModel @Inject constructor(
 
     fun clearAllHistory() {
         viewModelScope.launch {
-            historyRepository.clearAllHistory()
-            searchRepository.clearSearchHistory()
-            _statusToastMessage.value = "Đã xóa toàn bộ lịch sử xem và lịch sử tìm kiếm."
+            personalizedRecommendations.resetPersonalization()
+            _statusToastMessage.value = "Đã xóa lịch sử xem, tìm kiếm và dữ liệu cá nhân hóa. Yêu thích và danh sách phát vẫn được giữ."
         }
     }
 

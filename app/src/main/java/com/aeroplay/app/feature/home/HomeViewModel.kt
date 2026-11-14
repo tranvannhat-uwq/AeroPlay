@@ -8,6 +8,7 @@ import com.aeroplay.app.core.model.PlaybackPosition
 import com.aeroplay.app.core.model.SourceError
 import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.VideoItem
+import com.aeroplay.app.core.database.HistoryEntity
 import com.aeroplay.app.core.network.SourceDiagnostics
 import com.aeroplay.app.data.repository.ContentRepository
 import com.aeroplay.app.data.repository.HistoryRepository
@@ -28,6 +29,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
@@ -51,7 +54,10 @@ data class PersonalizedUiState(
     val message: String = ""
 )
 
+enum class RecommendationAction { NOT_INTERESTED, BLOCK_CHANNEL, MARK_WATCHED, WATCH_LATER }
+
 @HiltViewModel
+@OptIn(FlowPreview::class)
 class HomeViewModel @Inject constructor(
     private val contentRepository: ContentRepository,
     private val historyRepository: HistoryRepository,
@@ -82,11 +88,22 @@ class HomeViewModel @Inject constructor(
         historyRepository.observePlaybackPositions()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    val continueWatching: StateFlow<List<VideoItem>> = combine(
+        historyRepository.observeWatchHistory(),
+        savedPositions
+    ) { history, positions ->
+        history.mapNotNull { video ->
+            val position = positions[video.id] ?: return@mapNotNull null
+            if (position.positionMs <= 3_000L || position.progressFraction >= 0.95f) null else video
+        }.sortedByDescending { positions[it.id]?.updatedAtEpochMs ?: 0L }.take(12)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     val playlists: StateFlow<List<UserPlaylist>> = playlistRepository.observePlaylists()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private var loadJob: Job? = null
     private var loadedSource: ContentSourceType? = null
+    private val impressionsThisSession = mutableSetOf<String>()
 
     init {
         viewModelScope.launch {
@@ -97,15 +114,25 @@ class HomeViewModel @Inject constructor(
                 }
         }
         viewModelScope.launch {
-            combine(
-                personalizedRecommendations.history,
+            val profileInputs = combine(
+                personalizedRecommendations.history.debounce(2_000L),
+                personalizedRecommendations.favorites,
+                personalizedRecommendations.playlistVideos,
+                personalizedRecommendations.searchHistory
+            ) { history, favorites, playlists, searches ->
+                RecommendationInputs(history, favorites, playlists, searches)
+            }
+            val activeSource = combine(
                 settingsRepository.settingsFlow.map { it.activeSourceType }.distinctUntilChanged(),
                 recommendationRefresh
-            ) { history, source, _ -> history to source }
-                .collectLatest { (history, source) ->
+            ) { source, _ -> source }
+            combine(profileInputs, activeSource) { profile, source -> profile.copy(source = source) }
+                .collectLatest { input ->
                     personalized.value = PersonalizedUiState()
                     val result = try {
-                        personalizedRecommendations.recommendations(history, source)
+                        personalizedRecommendations.recommendations(
+                            input.history, input.favorites, input.playlists, input.searches, input.source
+                        )
                     } catch (cancelled: CancellationException) { throw cancelled }
                     catch (error: Exception) {
                         SourceDiagnostics.failure("recommendations", error)
@@ -178,6 +205,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun playVideo(video: VideoItem, queue: List<VideoItem>, queueTitle: String) {
+        viewModelScope.launch { personalizedRecommendations.recordClick(video) }
         playbackController.loadAndPlayVideo(
             video = video,
             queueItems = queue,
@@ -198,6 +226,24 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun recordRecommendationImpression(video: VideoItem) {
+        val key = "${video.sourceType.name}:${video.id}"
+        if (!impressionsThisSession.add(key)) return
+        viewModelScope.launch { personalizedRecommendations.recordImpression(video) }
+    }
+
+    fun actOnRecommendation(video: VideoItem, action: RecommendationAction) {
+        viewModelScope.launch {
+            when (action) {
+                RecommendationAction.NOT_INTERESTED -> personalizedRecommendations.markNotInterested(video)
+                RecommendationAction.BLOCK_CHANNEL -> personalizedRecommendations.blockChannel(video)
+                RecommendationAction.MARK_WATCHED -> personalizedRecommendations.markWatched(video)
+                RecommendationAction.WATCH_LATER -> playlistRepository.addToWatchLater(video)
+            }
+            recommendationRefresh.value++
+        }
+    }
+
     fun createPlaylistAndAdd(name: String, video: VideoItem) {
         viewModelScope.launch {
             val id = playlistRepository.createPlaylist(name)
@@ -211,3 +257,11 @@ class HomeViewModel @Inject constructor(
         }
     }
 }
+
+private data class RecommendationInputs(
+    val history: List<HistoryEntity>,
+    val favorites: List<com.aeroplay.app.core.database.FavoriteEntity>,
+    val playlists: List<com.aeroplay.app.core.database.PlaylistVideoEntity>,
+    val searches: List<com.aeroplay.app.core.database.SearchHistoryEntity>,
+    val source: ContentSourceType = ContentSourceType.DEMO_LOCAL
+)

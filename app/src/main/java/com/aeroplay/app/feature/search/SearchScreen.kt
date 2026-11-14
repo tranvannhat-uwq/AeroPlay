@@ -163,6 +163,34 @@ fun SearchScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(4.dp))
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(SearchSortOrder.entries) { order ->
+                FilterChip(
+                    selected = uiState.sortOrder == order,
+                    onClick = { viewModel.selectSortOrder(order) },
+                    label = { Text(order.label) }
+                )
+            }
+        }
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(SearchTimeRange.entries) { range ->
+                FilterChip(
+                    selected = uiState.timeRange == range,
+                    onClick = { viewModel.selectTimeRange(range) },
+                    label = { Text(range.label) }
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         // Content Area
@@ -285,6 +313,15 @@ fun SearchScreen(
                         }
                     }
                     else -> {
+                        if (uiState.source.isExperimental && (uiState.sortOrder != SearchSortOrder.RELEVANCE || uiState.timeRange != SearchTimeRange.ANY)) {
+                            item {
+                                Text(
+                                    text = "Sắp xếp và thời gian áp dụng trên tập video NewPipe đã tải. Trang tải thêm được nối phía sau để giữ thứ tự bạn đã xem.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         val showChannels = uiState.activeFilter == SearchFilterTab.ALL ||
                             uiState.activeFilter == SearchFilterTab.CHANNELS
                         val showPlaylists = uiState.activeFilter == SearchFilterTab.ALL ||

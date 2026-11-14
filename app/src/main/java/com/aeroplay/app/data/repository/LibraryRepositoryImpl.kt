@@ -79,6 +79,16 @@ class HistoryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun recordWatchedDuration(videoId: String, deltaMs: Long, durationMs: Long, positionMs: Long) {
+        if (videoId.isNotBlank() && deltaMs in 1L..10_000L) {
+            dao.addWatchedDuration(videoId, deltaMs, durationMs, positionMs)
+        }
+    }
+
+    override suspend fun recordCompletion(videoId: String) {
+        if (videoId.isNotBlank()) dao.addCompletedPlay(videoId)
+    }
+
     override suspend fun updatePositionOnly(videoId: String, positionMs: Long, durationMs: Long) {
         if (videoId.isBlank() || durationMs <= 0L) return
         // If user reached the final 3 seconds of a video, reset resume position to 0 so next play restarts cleanly
@@ -184,6 +194,28 @@ class PlaylistRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addVideoToPlaylist(playlistId: Long, video: VideoItem) {
+        dao.insertPlaylistVideo(
+            PlaylistVideoEntity(
+                playlistId = playlistId,
+                videoId = video.id,
+                url = video.url,
+                title = video.title,
+                channelName = video.channelName,
+                channelUrl = video.channelUrl,
+                channelAvatarUrl = video.channelAvatarUrl,
+                thumbnailUrl = video.thumbnailUrl,
+                durationSeconds = video.durationSeconds,
+                viewCount = video.viewCount,
+                uploadedText = video.uploadedText,
+                sourceTypeName = video.sourceType.name
+            )
+        )
+    }
+
+    override suspend fun addToWatchLater(video: VideoItem) {
+        val playlistId = dao.findPlaylistIdByName("Xem sau") ?: dao.insertPlaylist(
+            PlaylistEntity(name = "Xem sau", description = "Video đã lưu để xem sau")
+        )
         dao.insertPlaylistVideo(
             PlaylistVideoEntity(
                 playlistId = playlistId,

@@ -1,11 +1,13 @@
 package com.aeroplay.app.feature.search
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.aeroplay.app.core.model.ChannelItem
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.SearchResultBundle
+import com.aeroplay.app.core.model.SearchContentType
 import com.aeroplay.app.core.model.SourceError
 import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.VideoItem
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -44,10 +47,13 @@ enum class SearchFilterTab(val label: String) {
 data class SearchUiState(
     val query: String = "",
     val activeFilter: SearchFilterTab = SearchFilterTab.ALL,
+    val sortOrder: SearchSortOrder = SearchSortOrder.RELEVANCE,
+    val timeRange: SearchTimeRange = SearchTimeRange.ANY,
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val isLoadingMore: Boolean = false,
     val videos: List<VideoItem> = emptyList(),
+    val candidateVideos: List<VideoItem> = emptyList(),
     val channels: List<ChannelItem> = emptyList(),
     val playlists: List<PlaylistItem> = emptyList(),
     val correctedQuery: String? = null,
@@ -62,14 +68,33 @@ class SearchViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val historyRepository: HistoryRepository,
     private val playlistRepository: PlaylistRepository,
-    private val playbackController: PlaybackControllerManager
+    private val playbackController: PlaybackControllerManager,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SearchUiState())
+    private val _uiState = MutableStateFlow(
+        SearchUiState(
+            activeFilter = savedStateHandle.get<String>("search_content_filter")
+                ?.let { runCatching { SearchFilterTab.valueOf(it) }.getOrNull() } ?: SearchFilterTab.ALL,
+            sortOrder = savedStateHandle.get<String>("search_sort_order")
+                ?.let { runCatching { SearchSortOrder.valueOf(it) }.getOrNull() } ?: SearchSortOrder.RELEVANCE,
+            timeRange = savedStateHandle.get<String>("search_time_range")
+                ?.let { runCatching { SearchTimeRange.valueOf(it) }.getOrNull() } ?: SearchTimeRange.ANY
+        )
+    )
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     val searchHistory: StateFlow<List<String>> = searchRepository.observeSearchHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val personalTerms = combine(
+        historyRepository.observeWatchHistory(),
+        historyRepository.observeFavorites()
+    ) { watched, favorites ->
+        (watched.take(30) + favorites.take(20))
+            .flatMap { video -> Regex("[\\p{L}\\p{N}]{2,}").findAll(SearchQueryAnalyzer.normalize(video.title + " " + video.channelName)).map { it.value }.toList() }
+            .groupingBy { it }.eachCount().entries.sortedByDescending { it.value }.take(12).map { it.key }.toSet()
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
     val favoriteIds: StateFlow<Set<String>> = historyRepository.observeFavorites()
         .map { list -> list.map { it.id }.toSet() }
@@ -107,7 +132,39 @@ class SearchViewModel @Inject constructor(
     }
 
     fun selectFilter(tab: SearchFilterTab) {
+        if (tab == _uiState.value.activeFilter) return
+        savedStateHandle["search_content_filter"] = tab.name
         _uiState.update { it.copy(activeFilter = tab) }
+        val query = _uiState.value.query.trim()
+        if (query.isNotEmpty()) executeSearch(query)
+    }
+
+    fun selectSortOrder(order: SearchSortOrder) {
+        savedStateHandle["search_sort_order"] = order.name
+        _uiState.update { current ->
+            val ranked = VideoSearchRanker.rank(
+                current.candidateVideos,
+                SearchQueryAnalyzer.analyze(current.query),
+                order,
+                current.timeRange,
+                personalTerms.value
+            ).map { it.video }
+            current.copy(sortOrder = order, videos = ranked)
+        }
+    }
+
+    fun selectTimeRange(range: SearchTimeRange) {
+        savedStateHandle["search_time_range"] = range.name
+        _uiState.update { current ->
+            val ranked = VideoSearchRanker.rank(
+                current.candidateVideos,
+                SearchQueryAnalyzer.analyze(current.query),
+                current.sortOrder,
+                range,
+                personalTerms.value
+            ).map { it.video }
+            current.copy(timeRange = range, videos = ranked)
+        }
     }
 
     fun refresh() {
@@ -130,6 +187,7 @@ class SearchViewModel @Inject constructor(
                 isRefreshing = refresh,
                 isLoadingMore = false,
                 videos = if (refresh) it.videos else emptyList(),
+                candidateVideos = if (refresh) it.candidateVideos else emptyList(),
                 channels = if (refresh) it.channels else emptyList(),
                 playlists = if (refresh) it.playlists else emptyList(),
                 correctedQuery = null,
@@ -142,16 +200,31 @@ class SearchViewModel @Inject constructor(
 
         activeSearchJob = viewModelScope.launch {
             if (debounce) delay(400L)
-            val result = search(query, null, source)
+            val contentType = _uiState.value.activeFilter.toContentType()
+            val startedAtNanos = System.nanoTime()
+            val result = search(query, null, source, contentType)
             if (refresh && source == ContentSourceType.DEMO_LOCAL) delay(350L)
             result.fold(
                 onSuccess = { bundle ->
+                    val analysis = SearchQueryAnalyzer.analyze(query)
+                    val rankedVideos = VideoSearchRanker.rank(
+                        bundle.videos,
+                        analysis,
+                        _uiState.value.sortOrder,
+                        _uiState.value.timeRange,
+                        personalTerms.value
+                    )
                     SourceDiagnostics.event("search.ui", "source=$source refresh=$refresh videos=${bundle.videos.size} channels=${bundle.channels.size} playlists=${bundle.playlists.size}")
+                    SourceDiagnostics.event(
+                        "search.rank",
+                        "query=${analysis.originalQuery.take(80)} intent=${analysis.intent} language=${analysis.language} locale=vi-VN country=VN candidates=${bundle.videos.size} ranked=${rankedVideos.size} duplicateDrop=${bundle.videos.size - bundle.videos.distinctBy { "${it.sourceType.name}:${it.id}" }.size} durationMs=${(System.nanoTime() - startedAtNanos) / 1_000_000} top=${rankedVideos.take(10).joinToString { "${it.video.id}:${it.score.total}(q${it.score.queryRelevance},f${it.score.freshness ?: "?"},p${it.score.popularity ?: "?"})" }}"
+                    )
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            videos = bundle.videos,
+                            videos = rankedVideos.map { ranked -> ranked.video },
+                            candidateVideos = bundle.videos.distinctBy { "${it.sourceType.name}:${it.id}" },
                             channels = bundle.channels,
                             playlists = bundle.playlists,
                             correctedQuery = bundle.correctedQuery,
@@ -179,9 +252,14 @@ class SearchViewModel @Inject constructor(
         }
     }
 
-    private suspend fun search(query: String, token: Any?, source: ContentSourceType): Result<SearchResultBundle> {
+    private suspend fun search(
+        query: String,
+        token: Any?,
+        source: ContentSourceType,
+        contentType: SearchContentType
+    ): Result<SearchResultBundle> {
         val result = try {
-            withTimeoutOrNull(30_000L) { searchRepository.search(query, token, source) }
+            withTimeoutOrNull(30_000L) { searchRepository.search(query, token, source, contentType) }
                 ?: Result.failure(SourceErrorException(SourceError.NetworkError("Tìm kiếm quá lâu. Hãy thử lại.")))
         } catch (cancelled: CancellationException) {
             throw cancelled
@@ -199,13 +277,25 @@ class SearchViewModel @Inject constructor(
 
         activeSearchJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMore = true) }
-            val result = search(state.query.trim(), token, state.source)
+            val result = search(state.query.trim(), token, state.source, state.activeFilter.toContentType())
             result.fold(
                 onSuccess = { bundle ->
+                    val distinctPage = bundle.videos.distinctBy { "${it.sourceType.name}:${it.id}" }
+                    val duplicateCount = bundle.videos.size - distinctPage.size
+                    val analysis = SearchQueryAnalyzer.analyze(state.query)
+                    val newVideos = VideoSearchRanker.rank(
+                        distinctPage,
+                        analysis,
+                        state.sortOrder,
+                        state.timeRange,
+                        personalTerms.value
+                    ).map { it.video }.filterNot { incoming -> state.candidateVideos.any { existing -> existing.sourceType == incoming.sourceType && existing.id == incoming.id } }
+                    SourceDiagnostics.event("search.page.rank", "query=${analysis.originalQuery.take(80)} pageCandidates=${bundle.videos.size} duplicates=$duplicateCount appended=${newVideos.size} next=${bundle.nextPageToken != null}")
                     _uiState.update { current ->
                         current.copy(
                             isLoadingMore = false,
-                            videos = (current.videos + bundle.videos).distinctBy { it.id },
+                            videos = current.videos + newVideos,
+                            candidateVideos = (current.candidateVideos + distinctPage).distinctBy { "${it.sourceType.name}:${it.id}" },
                             channels = (current.channels + bundle.channels).distinctBy { it.id },
                             playlists = (current.playlists + bundle.playlists).distinctBy { it.id },
                             nextPageToken = bundle.nextPageToken
@@ -265,5 +355,12 @@ class SearchViewModel @Inject constructor(
             val id = playlistRepository.createPlaylist(name)
             playlistRepository.addVideoToPlaylist(id, video)
         }
+    }
+
+    private fun SearchFilterTab.toContentType(): SearchContentType = when (this) {
+        SearchFilterTab.ALL -> SearchContentType.ALL
+        SearchFilterTab.VIDEOS -> SearchContentType.VIDEO
+        SearchFilterTab.CHANNELS -> SearchContentType.CHANNEL
+        SearchFilterTab.PLAYLISTS -> SearchContentType.PLAYLIST
     }
 }

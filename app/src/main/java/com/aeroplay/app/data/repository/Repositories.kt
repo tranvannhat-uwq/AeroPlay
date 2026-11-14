@@ -6,6 +6,7 @@ import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaybackPosition
 import com.aeroplay.app.core.model.PlaybackQueue
 import com.aeroplay.app.core.model.SearchResultBundle
+import com.aeroplay.app.core.model.SearchContentType
 import com.aeroplay.app.core.model.StreamVariant
 import com.aeroplay.app.core.model.ThemeMode
 import com.aeroplay.app.core.model.UserPlaylist
@@ -33,7 +34,8 @@ interface SearchRepository {
     suspend fun search(
         query: String,
         pageToken: Any? = null,
-        sourceOverride: ContentSourceType? = null
+        sourceOverride: ContentSourceType? = null,
+        contentType: SearchContentType = SearchContentType.ALL
     ): Result<SearchResultBundle>
 
     fun observeSearchHistory(): Flow<List<String>>
@@ -76,6 +78,7 @@ interface PlaylistRepository {
     suspend fun renamePlaylist(playlistId: Long, newName: String, newDescription: String = "")
     suspend fun deletePlaylist(playlistId: Long)
     suspend fun addVideoToPlaylist(playlistId: Long, video: VideoItem)
+    suspend fun addToWatchLater(video: VideoItem)
     suspend fun removeVideoFromPlaylist(playlistId: Long, videoId: String)
 }
 
@@ -84,6 +87,8 @@ interface HistoryRepository {
     fun observePlaybackPositions(): Flow<Map<String, PlaybackPosition>>
     suspend fun getSavedPosition(videoId: String): PlaybackPosition?
     suspend fun recordWatchAndPosition(video: VideoItem, positionMs: Long, durationMs: Long)
+    suspend fun recordWatchedDuration(videoId: String, deltaMs: Long, durationMs: Long, positionMs: Long)
+    suspend fun recordCompletion(videoId: String)
     suspend fun updatePositionOnly(videoId: String, positionMs: Long, durationMs: Long)
     suspend fun removeFromHistory(videoId: String)
     suspend fun clearAllHistory()

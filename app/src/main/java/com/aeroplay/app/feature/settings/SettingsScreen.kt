@@ -281,7 +281,7 @@ fun SettingsScreen(
                     SettingsActionRow(
                         icon = Icons.Filled.DeleteForever,
                         title = "Xóa toàn bộ lịch sử xem & tìm kiếm",
-                        subtitle = "Xóa sạch dữ liệu lịch sử trong Room Database trên thiết bị",
+                        subtitle = "Xóa lịch sử xem, tìm kiếm và tín hiệu đề xuất; giữ nguyên yêu thích và danh sách phát",
                         onClick = { viewModel.clearAllHistory() }
                     )
                     SettingsActionRow(

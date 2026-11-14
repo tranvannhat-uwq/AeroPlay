@@ -26,6 +26,55 @@ interface AeroPlayDao {
         upsertHistory(entity.copy(playCount = (previousCount + 1).coerceAtMost(100_000)))
     }
 
+    @Query("UPDATE watch_history SET totalWatchedMs = MIN(totalWatchedMs + :deltaMs, 31536000000), totalDurationMs = CASE WHEN :durationMs > 0 THEN :durationMs ELSE totalDurationMs END, lastPositionMs = :positionMs WHERE videoId = :videoId")
+    suspend fun addWatchedDuration(videoId: String, deltaMs: Long, durationMs: Long, positionMs: Long)
+
+    @Query("UPDATE watch_history SET completedPlayCount = MIN(completedPlayCount + 1, 100000) WHERE videoId = :videoId")
+    suspend fun addCompletedPlay(videoId: String)
+
+    @Query("SELECT * FROM recommendation_feedback")
+    suspend fun getRecommendationFeedback(): List<RecommendationFeedbackEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRecommendationFeedback(entity: RecommendationFeedbackEntity)
+
+    @Query("DELETE FROM recommendation_feedback WHERE videoId = :videoId")
+    suspend fun deleteRecommendationFeedback(videoId: String)
+
+    @Query("SELECT * FROM blocked_recommendation_channels")
+    suspend fun getBlockedRecommendationChannels(): List<BlockedRecommendationChannelEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun blockRecommendationChannel(entity: BlockedRecommendationChannelEntity)
+
+    @Query("SELECT * FROM recommendation_impressions")
+    suspend fun getRecommendationImpressions(): List<RecommendationImpressionEntity>
+
+    @Query("SELECT * FROM recommendation_impressions WHERE videoId = :videoId LIMIT 1")
+    suspend fun getRecommendationImpression(videoId: String): RecommendationImpressionEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRecommendationImpression(entity: RecommendationImpressionEntity)
+
+    @Query("DELETE FROM recommendation_feedback")
+    suspend fun clearRecommendationFeedback()
+
+    @Query("DELETE FROM blocked_recommendation_channels")
+    suspend fun clearBlockedRecommendationChannels()
+
+    @Query("DELETE FROM recommendation_impressions")
+    suspend fun clearRecommendationImpressions()
+
+    @Transaction
+    suspend fun clearPersonalizationSignals() {
+        clearWatchHistory()
+        clearPlaybackPositions()
+        clearSearchHistory()
+        clearRecommendationFeedback()
+        clearBlockedRecommendationChannels()
+        clearRecommendationImpressions()
+    }
+
     @Query("SELECT * FROM device_videos ORDER BY importedAtEpochMs DESC")
     fun observeDeviceVideos(): Flow<List<DeviceVideoEntity>>
 
@@ -114,6 +163,9 @@ interface AeroPlayDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(entity: PlaylistEntity): Long
+
+    @Query("SELECT playlistId FROM user_playlists WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun findPlaylistIdByName(name: String): Long?
 
     @Query("UPDATE user_playlists SET name = :newName, description = :newDescription WHERE playlistId = :playlistId")
     suspend fun updatePlaylist(playlistId: Long, newName: String, newDescription: String)

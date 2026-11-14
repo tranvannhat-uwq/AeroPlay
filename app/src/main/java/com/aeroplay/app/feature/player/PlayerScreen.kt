@@ -103,6 +103,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.aeroplay.app.feature.search.RelatedVideoRanker
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -830,8 +831,8 @@ fun FullPlayerOverlay(
                     }
 
                     // Related Videos or Queue Section
-                    val nextList = detail?.relatedVideos?.ifEmpty { state.queue.items }
-                        ?: state.queue.items
+                    val nextList = RelatedVideoRanker.rank(detail?.relatedVideos.orEmpty(), currentVideo)
+                        .ifEmpty { state.queue.items }
                     if (nextList.isNotEmpty()) {
                         item {
                             Text(

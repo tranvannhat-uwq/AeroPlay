@@ -34,12 +34,12 @@ class RecommendationRankingTest {
         assertTrue(RecommendationRanking.rank(candidates, emptyList()).isEmpty())
     }
 
-    @Test fun recommendationsContainUniqueVideosAndLimitOneChannel() {
+    @Test fun recommendationsContainUniqueVideosAndLimitRepeatedChannels() {
         val seed = video("seed", "Piano ballad", "Piano")
         val songs = (1..8).map { video("song$it", "Piano ballad $it", "Piano") }
         val result = RecommendationRanking.rank(songs + songs,
             listOf(RecommendationSeed(seed, 3, 1_000)), now = 1_000)
-        assertEquals(3, result.size)
+        assertEquals(2, result.size)
         assertEquals(result.size, result.distinctBy { it.id }.size)
     }
 
