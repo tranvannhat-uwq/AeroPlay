@@ -7,6 +7,7 @@ import android.os.Environment
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -47,7 +48,10 @@ class DeviceShareUiTest {
                     !state.busy && state.completed == 1
                 }
                 compose.onNodeWithText("Thêm video").assertIsDisplayed()
-                compose.onNodeWithText("Video của bạn, luôn sẵn sàng").assertIsDisplayed()
+                compose.waitUntil(5_000) {
+                    compose.onAllNodesWithText("Video của bạn, luôn sẵn sàng").fetchSemanticsNodes().isEmpty()
+                }
+                compose.onNodeWithText("Video của bạn, luôn sẵn sàng").assertDoesNotExist()
                 check(runBlocking { graph.deviceMedia().videos.first() }.any { it.id == videoId })
             }
         } finally {

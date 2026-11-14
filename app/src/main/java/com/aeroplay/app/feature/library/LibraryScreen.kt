@@ -1,8 +1,7 @@
 package com.aeroplay.app.feature.library
 
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
+import android.content.ActivityNotFoundException
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -83,11 +82,18 @@ fun LibraryScreen(
     val deviceVideos by viewModel.deviceVideos.collectAsStateWithLifecycle()
     val mediaImport by viewModel.mediaImport.collectAsStateWithLifecycle()
     val backgroundPlaybackEnabled by viewModel.backgroundPlaybackEnabled.collectAsStateWithLifecycle()
-    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(50)) {
+    val videoPicker = rememberLauncherForActivityResult(GalleryVideoPicker()) {
         viewModel.importVideos(it)
     }
-    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
-        viewModel.importVideos(it)
+    var pickerError by remember { mutableStateOf<String?>(null) }
+
+    fun chooseVideoFromPhotos() {
+        pickerError = null
+        try {
+            videoPicker.launch(Unit)
+        } catch (_: ActivityNotFoundException) {
+            pickerError = "Chưa mở được ứng dụng Ảnh trên thiết bị này. Bạn có thể mở Ảnh và chia sẻ video sang AeroPlay."
+        }
     }
 
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
@@ -182,7 +188,7 @@ fun LibraryScreen(
 
             if (selectedTab == LibraryTab.DEVICE) {
                 Button(
-                    onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                    onClick = ::chooseVideoFromPhotos,
                     enabled = !mediaImport.busy
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -210,7 +216,9 @@ fun LibraryScreen(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { viewModel.onSearchQueryChange(it) },
-            placeholder = { Text("Tìm kiếm trong thư viện...") },
+            placeholder = {
+                Text("Tìm kiếm trong thư viện…", maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            },
             leadingIcon = {
                 Icon(Icons.Filled.Search, contentDescription = null)
             },
@@ -262,32 +270,43 @@ fun LibraryScreen(
         ) {
             when (selectedTab) {
                 LibraryTab.DEVICE -> {
-                    item {
-                        GlassSurface(shape = RoundedCornerShape(20.dp)) {
-                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Filled.VideoLibrary, null, tint = MaterialTheme.colorScheme.primary)
-                                Text("Video của bạn, luôn sẵn sàng", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    "Chọn video từ Ảnh hoặc Tệp. AeroPlay lưu một bản sao trên thiết bị để phát ngoại tuyến, khi tắt màn hình hoặc dùng ứng dụng khác.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                if (!backgroundPlaybackEnabled) {
-                                    Text("Phát nền đang tắt.", style = MaterialTheme.typography.bodySmall)
-                                    TextButton(onClick = viewModel::enableBackgroundPlayback) { Text("Bật phát nền") }
-                                }
-                                if (mediaImport.busy) {
-                                    val progress = mediaImport.progress
-                                    if (progress == null) LinearProgressIndicator(Modifier.fillMaxWidth())
-                                    else LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
-                                    Text(
-                                        "Đã xử lý ${mediaImport.completed}/${mediaImport.total} video",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                                if (mediaImport.message.isNotBlank()) Text(mediaImport.message, style = MaterialTheme.typography.bodySmall)
-                                TextButton(onClick = { filePicker.launch(arrayOf("video/*")) }, enabled = !mediaImport.busy) {
-                                    Text("Chọn từ Tệp")
+                    if (deviceVideos.isEmpty() || mediaImport.busy || mediaImport.message.isNotBlank() ||
+                        !backgroundPlaybackEnabled || pickerError != null) {
+                        item {
+                            GlassSurface(shape = RoundedCornerShape(20.dp)) {
+                                Column(
+                                    Modifier.padding(if (deviceVideos.isEmpty()) 16.dp else 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    if (deviceVideos.isEmpty()) {
+                                        Icon(Icons.Filled.VideoLibrary, null, tint = MaterialTheme.colorScheme.primary)
+                                        Text("Video của bạn, luôn sẵn sàng", style = MaterialTheme.typography.titleMedium)
+                                        Text(
+                                            "Chọn video từ Ảnh. AeroPlay lưu một bản sao để phát ngoại tuyến, khi tắt màn hình hoặc dùng ứng dụng khác.",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (!backgroundPlaybackEnabled) {
+                                        Text("Phát nền đang tắt.", style = MaterialTheme.typography.bodySmall)
+                                        TextButton(onClick = viewModel::enableBackgroundPlayback) { Text("Bật phát nền") }
+                                    }
+                                    if (mediaImport.busy) {
+                                        val progress = mediaImport.progress
+                                        if (progress == null) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                        else LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                                        Text(
+                                            "Đã xử lý ${mediaImport.completed}/${mediaImport.total} video",
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                    if (mediaImport.message.isNotBlank()) Text(mediaImport.message, style = MaterialTheme.typography.bodySmall)
+                                    pickerError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+                                    if (deviceVideos.isEmpty()) {
+                                        TextButton(onClick = ::chooseVideoFromPhotos, enabled = !mediaImport.busy) {
+                                            Text("Chọn từ Ảnh")
+                                        }
+                                    }
                                 }
                             }
                         }

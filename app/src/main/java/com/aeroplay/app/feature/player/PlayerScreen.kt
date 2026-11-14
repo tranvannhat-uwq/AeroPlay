@@ -2,6 +2,7 @@ package com.aeroplay.app.feature.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -13,6 +14,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
@@ -30,6 +33,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -77,6 +81,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -90,12 +95,18 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
@@ -107,6 +118,7 @@ import com.aeroplay.app.core.designsystem.GlassSurface
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.core.model.StreamVariant
+import kotlinx.coroutines.delay
 
 @Composable
 fun FullPlayerOverlay(
@@ -126,7 +138,15 @@ fun FullPlayerOverlay(
     val currentVideo = state.currentVideo ?: return
     val detail = state.currentDetail
 
-    var isLandscapeFullscreen by remember { mutableStateOf(false) }
+    var landscapeRequested by remember { mutableStateOf(false) }
+    val orientation = LocalConfiguration.current.orientation
+    val isLandscapeFullscreen = landscapeRequested ||
+        orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    fun exitLandscape() {
+        landscapeRequested = false
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var draggingPlayer by remember { mutableStateOf(false) }
     val (dismissDistance, flingDistance, minFlingDrag) = with(LocalDensity.current) {
@@ -137,7 +157,9 @@ fun FullPlayerOverlay(
         animationSpec = if (draggingPlayer || statusColors.reduceMotion) snap() else spring(dampingRatio = 0.86f),
         label = "Player drag"
     )
-    var showControlsOverlay by remember { mutableStateOf(true) }
+    var showControlsOverlay by remember(currentVideo.id) { mutableStateOf(true) }
+    var controlsInteraction by remember { mutableIntStateOf(0) }
+    var touchingPlayer by remember { mutableStateOf(false) }
     var showQualityDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
@@ -145,6 +167,28 @@ fun FullPlayerOverlay(
 
     var isUserDraggingSeek by remember { mutableStateOf(false) }
     var dragSeekPositionMs by remember { mutableFloatStateOf(0f) }
+
+    fun keepControlsVisible() {
+        controlsInteraction++
+        showControlsOverlay = true
+    }
+
+    val canAutoHideControls = showControlsOverlay && state.isPlaying &&
+        !state.isBuffering && !state.isLoadingMetadata && state.error == null &&
+        !isUserDraggingSeek && !draggingPlayer && !touchingPlayer &&
+        !showQualityDialog && !showSpeedDialog && !showAddToPlaylistDialog &&
+        state.isFullPlayerOpen && !state.isInPipMode
+
+    LaunchedEffect(canAutoHideControls, controlsInteraction, currentVideo.id, isLandscapeFullscreen) {
+        if (canAutoHideControls) {
+            delay(4_000L)
+            showControlsOverlay = false
+        }
+    }
+
+    LaunchedEffect(state.isPlaying, state.error) {
+        if (!state.isPlaying || state.error != null) showControlsOverlay = true
+    }
 
     LaunchedEffect(state.isFullPlayerOpen, state.isInPipMode) {
         if (state.isFullPlayerOpen || state.isInPipMode) dragOffset = 0f
@@ -156,10 +200,26 @@ fun FullPlayerOverlay(
         }
     }
 
+    val immersive = isLandscapeFullscreen && state.isFullPlayerOpen && !state.isInPipMode
+    DisposableEffect(activity, immersive) {
+        val window = activity?.window
+        val bars = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
+        val previousBehavior = bars?.systemBarsBehavior
+        if (immersive) {
+            bars?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            bars?.hide(WindowInsetsCompat.Type.systemBars())
+        } else {
+            bars?.show(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose {
+            if (immersive) bars?.show(WindowInsetsCompat.Type.systemBars())
+            previousBehavior?.let { bars?.systemBarsBehavior = it }
+        }
+    }
+
     BackHandler(enabled = state.isFullPlayerOpen && !state.isInPipMode) {
         if (isLandscapeFullscreen) {
-            isLandscapeFullscreen = false
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            exitLandscape()
         } else {
             viewModel.minimizePlayer()
         }
@@ -222,13 +282,15 @@ fun FullPlayerOverlay(
     }
 
     Box(
-        modifier = modifier.fillMaxSize().graphicsLayer {
-            translationY = playerOffset
-            val shrink = if (statusColors.reduceMotion) 0f else (playerOffset / size.height.coerceAtLeast(1f)).coerceAtMost(0.15f)
-            scaleX = 1f - shrink
-            scaleY = 1f - shrink
-            transformOrigin = TransformOrigin(0.5f, 0f)
-        }
+        modifier = modifier.fillMaxSize()
+            .then(if (isLandscapeFullscreen) Modifier else Modifier.statusBarsPadding())
+            .graphicsLayer {
+                translationY = playerOffset
+                val shrink = if (statusColors.reduceMotion) 0f else (playerOffset / size.height.coerceAtLeast(1f)).coerceAtMost(0.15f)
+                scaleX = 1f - shrink
+                scaleY = 1f - shrink
+                transformOrigin = TransformOrigin(0.5f, 0f)
+            }
     ) {
         GlassBackground()
         Column(modifier = Modifier.fillMaxSize()) {
@@ -247,6 +309,20 @@ fun FullPlayerOverlay(
             Box(
                 modifier = videoBoxModifier
                     .testTag("FullVideoStage")
+                    .pointerInput(currentVideo.id) {
+                        awaitEachGesture {
+                            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                            touchingPlayer = true
+                            try {
+                                do {
+                                    val event = awaitPointerEvent(PointerEventPass.Final)
+                                } while (event.changes.any { it.pressed })
+                            } finally {
+                                touchingPlayer = false
+                                controlsInteraction++
+                            }
+                        }
+                    }
                     .draggable(
                         state = rememberDraggableState { delta ->
                             dragOffset = (dragOffset + delta).coerceAtLeast(0f)
@@ -335,7 +411,7 @@ fun FullPlayerOverlay(
                     visible = showControlsOverlay,
                     enter = fadeIn(),
                     exit = fadeOut(),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().testTag("VideoControls")
                 ) {
                     Box(
                         modifier = Modifier
@@ -358,9 +434,7 @@ fun FullPlayerOverlay(
                             IconButton(
                                 onClick = {
                                     if (isLandscapeFullscreen) {
-                                        isLandscapeFullscreen = false
-                                        activity?.requestedOrientation =
-                                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                        exitLandscape()
                                     } else {
                                         viewModel.minimizePlayer()
                                     }
@@ -412,7 +486,10 @@ fun FullPlayerOverlay(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(
-                                onClick = { viewModel.playPrevious() },
+                                onClick = {
+                                    keepControlsVisible()
+                                    viewModel.playPrevious()
+                                },
                                 enabled = state.queue.hasPrevious || state.currentPositionMs > 5_000L
                             ) {
                                 Icon(
@@ -423,7 +500,10 @@ fun FullPlayerOverlay(
                                 )
                             }
 
-                            IconButton(onClick = { viewModel.skipBackward() }) {
+                            IconButton(onClick = {
+                                keepControlsVisible()
+                                viewModel.skipBackward()
+                            }) {
                                 Icon(
                                     imageVector = Icons.Filled.Replay10,
                                     contentDescription = "Lùi 10 giây",
@@ -436,7 +516,10 @@ fun FullPlayerOverlay(
                                 modifier = Modifier
                                     .size(58.dp)
                                     .clip(CircleShape)
-                                    .clickable { viewModel.togglePlayPause() },
+                                    .clickable {
+                                        keepControlsVisible()
+                                        viewModel.togglePlayPause()
+                                    },
                                 shape = CircleShape,
                                 color = statusColors.playButton
                             ) {
@@ -450,7 +533,10 @@ fun FullPlayerOverlay(
                                 }
                             }
 
-                            IconButton(onClick = { viewModel.skipForward() }) {
+                            IconButton(onClick = {
+                                keepControlsVisible()
+                                viewModel.skipForward()
+                            }) {
                                 Icon(
                                     imageVector = Icons.Filled.Forward10,
                                     contentDescription = "Tua 10 giây",
@@ -460,7 +546,10 @@ fun FullPlayerOverlay(
                             }
 
                             IconButton(
-                                onClick = { viewModel.playNext() },
+                                onClick = {
+                                    keepControlsVisible()
+                                    viewModel.playNext()
+                                },
                                 enabled = state.queue.hasNext
                             ) {
                                 Icon(
@@ -518,12 +607,11 @@ fun FullPlayerOverlay(
 
                                 IconButton(
                                     onClick = {
-                                        val nextLandscape = !isLandscapeFullscreen
-                                        isLandscapeFullscreen = nextLandscape
-                                        activity?.requestedOrientation = if (nextLandscape) {
-                                            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                                        if (isLandscapeFullscreen) {
+                                            exitLandscape()
                                         } else {
-                                            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                                            landscapeRequested = true
+                                            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                                         }
                                     },
                                     modifier = Modifier.size(32.dp)

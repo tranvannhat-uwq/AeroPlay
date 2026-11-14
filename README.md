@@ -9,8 +9,9 @@
 ## Tính năng
 
 - Giao diện Liquid Glass sáng, vuốt thu video thành cửa sổ nổi và vuốt lên để mở rộng.
+- Trình phát ngang ẩn thanh hệ thống; nút điều khiển tự ẩn sau 4 giây.
 - Gợi ý Dành cho bạn dựa trên lịch sử xem và nguồn nội dung đang dùng.
-- Thư viện video từ thiết bị, chọn từ Ảnh/Tệp hoặc chia sẻ sang AeroPlay, phát ngoại tuyến và phát nền.
+- Thư viện video từ thiết bị, chọn từ Ảnh/Thư viện ảnh hoặc chia sẻ sang AeroPlay, phát ngoại tuyến và phát nền.
 - Nguồn YouTube qua NewPipe Extractor và catalog Chuẩn Mở riêng.
 - Tìm kiếm, chọn chất lượng, phát video/audio, hàng đợi, mini player, phát nền và PiP.
 - Lịch sử, vị trí xem dở, yêu thích và playlist lưu cục bộ bằng Room.

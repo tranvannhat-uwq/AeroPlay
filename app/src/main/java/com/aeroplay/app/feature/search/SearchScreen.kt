@@ -105,7 +105,12 @@ fun SearchScreen(
             value = uiState.query,
             onValueChange = { viewModel.onQueryChange(it) },
             placeholder = {
-                Text(if (uiState.source.isExperimental) "Nhập từ khóa video, bài hát, kênh..." else "Tìm trong danh mục Chuẩn Mở")
+                Text(
+                    if (uiState.source.isExperimental) "Tìm video, bài hát, kênh…" else "Tìm trong danh mục Chuẩn Mở",
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
             },
             leadingIcon = {
                 Icon(

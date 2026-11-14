@@ -427,7 +427,7 @@ private fun AeroPlayAppRoot(
                     viewModel = playerViewModel,
                     videoOutput = videoOutput,
                     onEnterPip = onEnterPip,
-                    modifier = Modifier.statusBarsPadding()
+                    modifier = Modifier
                 )
             }
         }
