@@ -33,10 +33,11 @@ Mọi sort/filter là trên tập ứng viên đã tải, không phải thứ t�
 
 Đã xác minh trên Android 8/API 26:
 
-- Unit tests: 46 hoàn tất, 3 skipped, 0 thất bại.
+- Unit tests: 46 tests, 3 skipped, 0 thất bại.
 - Instrumentation trên API 26: 38 tests, 13 skipped theo opt-in, 0 thất bại; các bài Room migration và UI không opt-in đều chạy.
 - Luồng NewPipe thực: tìm kiếm video, trang kế tiếp và metadata YouTube thành công.
 - Bài dò 10 truy vấn thực (`nhạc trẻ`, `nhạc remix 2026`, `hài việt nam`, `review điện thoại`, `game mobile`, `tin tức hôm nay`, `sơn chống thấm`, `Sơn Tùng M-TP`, `Taylor Swift`, `MrBeast`) thành công: cả 10 có ứng viên video thật, qua xếp hạng cục bộ và không trùng ID.
+- Sau khi phát hành, bài kiểm tra giao diện Cài đặt gọi GitHub updater thật và nhận trạng thái release hợp lệ thành công.
 
 Đây là xác nhận khả năng truy xuất/độ ổn định, không phải đánh giá rằng kết quả đứng đầu luôn đúng ý định. Chất lượng ngữ nghĩa cần nhãn từ người đánh giá và không được suy ra từ score ranker; chưa công bố Precision@10/NDCG.
 
@@ -44,5 +45,5 @@ Mọi sort/filter là trên tập ứng viên đã tải, không phải thứ t�
 
 - Debug: `app/build/outputs/apk/debug/app-debug.apk`
 - Release có chữ ký: `app/build/outputs/apk/release/app-release.apk` (minSdk 26).
-- Build release có chữ ký thành công; script tạo release đã xác minh package/version, minSdk và certificate. SHA-256: `e15bdcbc5cbda0317aafc7969a5726e081abdf03f64127c41d7e0ccaaf1a647d`.
-- GitHub Release: sẽ thêm liên kết sau khi workflow phát hành và xác minh đủ APK, `update.json`, checksum và source ZIP.
+- GitHub Release `v2.0.0` (versionCode 7) đã công khai và là bản mới nhất: [Tải AeroPlay 2.0.0](https://github.com/tranvannhat-uwq/AeroPlay/releases/tag/v2.0.0).
+- Đã tải APK từ GitHub và đối chiếu SHA-256 với `update.json`; khớp: `39ea64fa934d7af7f29f61e0d84a7f6c9705959f44fbe838933cc7675c5594f9`. Release có APK, manifest, checksum và source ZIP.
