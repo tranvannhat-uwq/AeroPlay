@@ -33,6 +33,7 @@ class ContentRepositoryImpl @Inject constructor(
         return when (activeSource) {
             ContentSourceType.DEMO_LOCAL -> Result.success(demoSource.getRecommendedVideos())
             ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.fetchTrendingOrFeatured()
+            ContentSourceType.DEVICE_LOCAL -> Result.success(emptyList())
         }
     }
 }
@@ -55,6 +56,7 @@ class SearchRepositoryImpl @Inject constructor(
         return when (activeSource) {
             ContentSourceType.DEMO_LOCAL -> Result.success(demoSource.search(query))
             ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.search(query, pageToken)
+            ContentSourceType.DEVICE_LOCAL -> Result.success(SearchResultBundle(query = query, sourceType = activeSource))
         }
     }
 
@@ -82,13 +84,17 @@ class SearchRepositoryImpl @Inject constructor(
 class VideoMetadataRepositoryImpl @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val demoSource: DemoLocalMediaSource,
-    private val extractorSource: ExperimentalExtractorSource
+    private val extractorSource: ExperimentalExtractorSource,
+    private val deviceMedia: DeviceMediaRepository
 ) : VideoMetadataRepository {
 
     override suspend fun getVideoDetail(
         videoIdOrUrl: String,
         sourceHint: ContentSourceType?
     ): Result<VideoDetail> {
+        if (sourceHint == ContentSourceType.DEVICE_LOCAL || videoIdOrUrl.startsWith("device_")) {
+            return deviceMedia.detail(videoIdOrUrl)
+        }
         val isDemoId = videoIdOrUrl.startsWith("demo_") ||
             videoIdOrUrl.contains("commondatastorage.googleapis.com")
         if (isDemoId) {
@@ -108,6 +114,7 @@ class VideoMetadataRepositoryImpl @Inject constructor(
         return when (effectiveSource) {
             ContentSourceType.DEMO_LOCAL -> demoSource.getVideoDetail(videoIdOrUrl)
             ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.extractVideoDetail(videoIdOrUrl)
+            ContentSourceType.DEVICE_LOCAL -> deviceMedia.detail(videoIdOrUrl)
         }
     }
 }

@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -15,6 +16,62 @@ interface AeroPlayDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertHistory(entity: HistoryEntity)
+
+    @Query("SELECT * FROM watch_history WHERE videoId = :videoId LIMIT 1")
+    suspend fun getHistory(videoId: String): HistoryEntity?
+
+    @Transaction
+    suspend fun recordHistory(entity: HistoryEntity) {
+        val previousCount = getHistory(entity.videoId)?.playCount ?: 0
+        upsertHistory(entity.copy(playCount = (previousCount + 1).coerceAtMost(100_000)))
+    }
+
+    @Query("SELECT * FROM device_videos ORDER BY importedAtEpochMs DESC")
+    fun observeDeviceVideos(): Flow<List<DeviceVideoEntity>>
+
+    @Query("SELECT * FROM device_videos WHERE videoId = :videoId LIMIT 1")
+    suspend fun getDeviceVideo(videoId: String): DeviceVideoEntity?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDeviceVideo(video: DeviceVideoEntity): Long
+
+    @Query("DELETE FROM device_videos WHERE videoId = :videoId")
+    suspend fun deleteDeviceVideo(videoId: String)
+
+    @Query("UPDATE device_videos SET title = :title WHERE videoId = :videoId")
+    suspend fun updateDeviceTitle(videoId: String, title: String)
+
+    @Query("UPDATE watch_history SET title = :title WHERE videoId = :videoId")
+    suspend fun updateHistoryTitle(videoId: String, title: String)
+
+    @Query("UPDATE favorites SET title = :title WHERE videoId = :videoId")
+    suspend fun updateFavoriteTitle(videoId: String, title: String)
+
+    @Query("UPDATE playlist_videos SET title = :title WHERE videoId = :videoId")
+    suspend fun updatePlaylistVideoTitle(videoId: String, title: String)
+
+    @Transaction
+    suspend fun renameDeviceVideo(videoId: String, title: String) {
+        updateDeviceTitle(videoId, title)
+        updateHistoryTitle(videoId, title)
+        updateFavoriteTitle(videoId, title)
+        updatePlaylistVideoTitle(videoId, title)
+    }
+
+    @Query("DELETE FROM playlist_videos WHERE videoId = :videoId")
+    suspend fun deleteVideoFromAllPlaylists(videoId: String)
+
+    @Query("DELETE FROM playback_positions WHERE videoId = :videoId")
+    suspend fun deletePosition(videoId: String)
+
+    @Transaction
+    suspend fun removeDeviceReferences(videoId: String) {
+        deleteDeviceVideo(videoId)
+        deleteHistoryItem(videoId)
+        deleteFavorite(videoId)
+        deleteVideoFromAllPlaylists(videoId)
+        deletePosition(videoId)
+    }
 
     @Query("DELETE FROM watch_history WHERE videoId = :videoId")
     suspend fun deleteHistoryItem(videoId: String)

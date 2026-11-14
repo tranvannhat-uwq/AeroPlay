@@ -2,11 +2,14 @@ package com.aeroplay.app.feature.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.net.Uri
 import com.aeroplay.app.core.model.PlaybackPosition
 import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.data.repository.HistoryRepository
 import com.aeroplay.app.data.repository.PlaylistRepository
+import com.aeroplay.app.data.repository.DeviceMediaRepository
+import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -16,12 +19,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 enum class LibraryTab(val label: String) {
     HISTORY("Lịch sử xem"),
+    DEVICE("Trên thiết bị"),
     FAVORITES("Yêu thích"),
     PLAYLISTS("Danh sách phát")
 }
@@ -31,11 +36,38 @@ enum class LibraryTab(val label: String) {
 class LibraryViewModel @Inject constructor(
     private val historyRepository: HistoryRepository,
     private val playlistRepository: PlaylistRepository,
+    private val deviceMedia: DeviceMediaRepository,
+    private val settingsRepository: SettingsRepository,
     private val playbackController: PlaybackControllerManager
 ) : ViewModel() {
 
     private val _selectedTab = MutableStateFlow(LibraryTab.HISTORY)
     val selectedTab: StateFlow<LibraryTab> = _selectedTab.asStateFlow()
+    val deviceVideos = deviceMedia.videos
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val mediaImport = deviceMedia.importState
+    val backgroundPlaybackEnabled = settingsRepository.settingsFlow.map { it.backgroundPlaybackEnabled }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    fun enableBackgroundPlayback() {
+        viewModelScope.launch { settingsRepository.setBackgroundPlaybackEnabled(true) }
+    }
+
+    fun importVideos(uris: List<Uri>) {
+        if (uris.isNotEmpty()) {
+            selectTab(LibraryTab.DEVICE)
+            deviceMedia.importVideos(uris)
+        }
+    }
+
+    fun removeDeviceVideo(videoId: String) {
+        if (playbackController.playbackState.value.currentVideo?.id == videoId) playbackController.dismissPlayer()
+        viewModelScope.launch { deviceMedia.remove(videoId) }
+    }
+
+    fun renameDeviceVideo(videoId: String, title: String) {
+        if (title.isNotBlank()) viewModelScope.launch { deviceMedia.rename(videoId, title) }
+    }
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()

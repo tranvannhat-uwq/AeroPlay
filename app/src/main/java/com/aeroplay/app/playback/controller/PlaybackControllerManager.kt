@@ -78,6 +78,7 @@ class PlaybackControllerManager @Inject constructor(
     private var currentStreamSelection: ResolvedStreamSelection? = null
     private var hasAttemptedProgressiveFallback = false
     private var lastPersistedSecond = -1L
+    private var historyRecordedForSelection = false
 
     init {
         connectSession()
@@ -146,6 +147,15 @@ class PlaybackControllerManager @Inject constructor(
                 }
                 if (!isPlaying) {
                     persistCurrentPosition()
+                } else {
+                    val state = _playbackState.value
+                    val video = state.currentVideo
+                    if (!historyRecordedForSelection && video != null && controller.currentMediaItem?.mediaId == video.id) {
+                        historyRecordedForSelection = true
+                        val position = controller.currentPosition.coerceAtLeast(0L)
+                        val duration = controller.duration.coerceAtLeast(0L)
+                        scope.launch { historyRepository.recordWatchAndPosition(video, position, duration) }
+                    }
                 }
             }
 
@@ -258,6 +268,8 @@ class PlaybackControllerManager @Inject constructor(
 
         persistCurrentPosition()
         extractionJob?.cancel()
+        historyRecordedForSelection = false
+        lastPersistedSecond = -1L
         hasAttemptedProgressiveFallback = false
 
         val normalizedQueue = if (queueItems.any { it.id == video.id }) {
@@ -355,11 +367,6 @@ class PlaybackControllerManager @Inject constructor(
                                 defaultSpeed = settings.defaultPlaybackSpeed
                             )
 
-                            historyRepository.recordWatchAndPosition(
-                                video = updatedVideo,
-                                positionMs = savedPosition,
-                                durationMs = detail.durationSeconds * 1000L
-                            )
                         },
                         onFailure = { err ->
                             val sourceErr = (err as? SourceErrorException)?.sourceError

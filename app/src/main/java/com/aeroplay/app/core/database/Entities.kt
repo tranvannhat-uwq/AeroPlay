@@ -21,7 +21,8 @@ data class HistoryEntity(
     val sourceTypeName: String,
     val lastPositionMs: Long = 0L,
     val totalDurationMs: Long = 0L,
-    val watchedAtEpochMs: Long = System.currentTimeMillis()
+    val watchedAtEpochMs: Long = System.currentTimeMillis(),
+    val playCount: Int = 1
 ) {
     fun toVideoItem(): VideoItem = VideoItem(
         id = videoId,
@@ -126,4 +127,18 @@ data class PlaybackPositionEntity(
 data class SearchHistoryEntity(
     @PrimaryKey val query: String,
     val searchedAtEpochMs: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "device_videos")
+data class DeviceVideoEntity(
+    @PrimaryKey val videoId: String,
+    val title: String,
+    val fileName: String,
+    val thumbnailName: String,
+    val mimeType: String,
+    val durationMs: Long,
+    val width: Int,
+    val height: Int,
+    val sizeBytes: Long,
+    val importedAtEpochMs: Long
 )

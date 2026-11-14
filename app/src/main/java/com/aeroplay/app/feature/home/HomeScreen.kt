@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WarningAmber
@@ -62,6 +63,8 @@ import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
 import com.aeroplay.app.core.designsystem.CoralRedAccent
 import com.aeroplay.app.core.designsystem.ElectricViolet
 import com.aeroplay.app.core.designsystem.ErrorStateCard
+import com.aeroplay.app.core.designsystem.GlassSurface
+import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.designsystem.SkeletonVideoCard
 import com.aeroplay.app.core.designsystem.SourceModePill
@@ -79,12 +82,13 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val settings by viewModel.settingsState.collectAsStateWithLifecycle()
-    val recentHistory by viewModel.recentHistory.collectAsStateWithLifecycle()
+    val personalized by viewModel.personalizedState.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     val savedPositions by viewModel.savedPositions.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val refreshState = rememberPullToRefreshState()
+    val floatingInset = LocalFloatingPlayerInset.current
 
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
     var showSourceSwitchDialog by remember { mutableStateOf(false) }
@@ -127,7 +131,7 @@ fun HomeScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 140.dp),
+            contentPadding = PaddingValues(bottom = 96.dp + floatingInset),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // 1. Brand Header & Source Pill
@@ -185,14 +189,13 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Prominent Search Bar
-                    Surface(
+                    GlassSurface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
                             .clickable { onOpenSearch() },
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-                        tonalElevation = 4.dp
+                        shape = RoundedCornerShape(22.dp),
+                        elevation = 3.dp
                     ) {
                         Row(
                             modifier = Modifier
@@ -222,18 +225,36 @@ fun HomeScreen(
                 }
             }
 
-            // 2. Recently Watched Section (if not empty)
-            if (recentHistory.isNotEmpty()) {
+            // Recommendations based on viewing history.
+            if (personalized.videos.isNotEmpty()) {
                 item {
                     HorizontalVideoCarouselSection(
-                        title = "Đã xem gần đây",
-                        icon = Icons.Filled.History,
-                        videos = recentHistory,
+                        title = "Dành cho bạn",
+                        icon = Icons.Filled.AutoAwesome,
+                        videos = personalized.videos,
                         savedPositions = savedPositions,
                         onVideoClick = { video ->
-                            viewModel.playVideo(video, recentHistory, "Đã xem gần đây")
+                            viewModel.playVideo(video, personalized.videos, "Dành cho bạn")
                         }
                     )
+                }
+            } else {
+                item {
+                    GlassSurface(
+                        shape = RoundedCornerShape(20.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    ) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Dành cho bạn", style = MaterialTheme.typography.titleMedium)
+                            if (personalized.loading) {
+                                LinearProgressIndicator(Modifier.fillMaxWidth())
+                                Text("Đang tìm video tương tự…", style = MaterialTheme.typography.bodySmall)
+                            } else {
+                                Text(personalized.message, style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
                 }
             }
 
@@ -487,7 +508,7 @@ fun SourceSelectionDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                ContentSourceType.entries.forEach { source ->
+                ContentSourceType.onlineSources.forEach { source ->
                     val isSelected = source == currentSource
                     Surface(
                         modifier = Modifier

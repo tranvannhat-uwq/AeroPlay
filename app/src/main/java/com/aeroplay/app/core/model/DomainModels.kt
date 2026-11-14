@@ -12,7 +12,12 @@ enum class ContentSourceType(val displayName: String, val isExperimental: Boolea
     EXPERIMENTAL_EXTRACTOR(
         displayName = "Nguồn Thử Nghiệm (NewPipe Extractor)",
         isExperimental = true
-    )
+    ),
+    DEVICE_LOCAL("Video từ thiết bị", false);
+
+    companion object {
+        val onlineSources = listOf(DEMO_LOCAL, EXPERIMENTAL_EXTRACTOR)
+    }
 }
 
 enum class DeliveryType {
@@ -238,7 +243,7 @@ enum class ThemeMode(val label: String) {
 }
 
 data class AppSettings(
-    val themeMode: ThemeMode = ThemeMode.DARK,
+    val themeMode: ThemeMode = ThemeMode.LIGHT,
     val activeSourceType: ContentSourceType = ContentSourceType.DEMO_LOCAL,
     val experimentalWarningAccepted: Boolean = false,
     val defaultQualityLabel: String = "720p",

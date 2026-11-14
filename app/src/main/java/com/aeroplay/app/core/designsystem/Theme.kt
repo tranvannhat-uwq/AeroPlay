@@ -39,11 +39,11 @@ val StatusVerifiedColor = Color(0xFF10B981)
 val StatusWarningColor = Color(0xFFF59E0B)
 
 // Neutral Light Palette
-val NeutralLightBackground = Color(0xFFF6F7FB)
+val NeutralLightBackground = Color(0xFFF4F5FF)
 val NeutralLightSurface = Color(0xFFFFFFFF)
-val NeutralLightSurfaceVariant = Color(0xFFEEF0F7)
-val NeutralLightTextPrimary = Color(0xFF111420)
-val NeutralLightTextSecondary = Color(0xFF525866)
+val NeutralLightSurfaceVariant = Color(0xFFEEEDFA)
+val NeutralLightTextPrimary = Color(0xFF17182F)
+val NeutralLightTextSecondary = Color(0xFF525571)
 
 private val AeroPlayDarkColors = darkColorScheme(
     primary = CoralRedAccent,
@@ -67,11 +67,11 @@ private val AeroPlayDarkColors = darkColorScheme(
 )
 
 private val AeroPlayLightColors = lightColorScheme(
-    primary = Color(0xFFE11D48),
+    primary = Color(0xFF5940C4),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFE4E8),
-    onPrimaryContainer = Color(0xFF4C0519),
-    secondary = ElectricVioletDeep,
+    primaryContainer = Color(0xFFEAE3FF),
+    onPrimaryContainer = Color(0xFF26115C),
+    secondary = Color(0xFFAD3368),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFEDE9FE),
     onSecondaryContainer = Color(0xFF2E1065),
@@ -147,7 +147,7 @@ val LocalAeroPlayStatusColors = staticCompositionLocalOf { AeroPlayStatusColors(
 
 @Composable
 fun AeroPlayTheme(
-    themeMode: ThemeMode = ThemeMode.DARK,
+    themeMode: ThemeMode = ThemeMode.LIGHT,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -170,11 +170,22 @@ fun AeroPlayTheme(
     }
 
     val colorScheme = if (useDark) AeroPlayDarkColors else AeroPlayLightColors
-    val statusColors = remember(reduceMotion) {
-        AeroPlayStatusColors(reduceMotion = reduceMotion)
+    val statusColors = remember(reduceMotion, useDark) {
+        if (useDark) AeroPlayStatusColors(reduceMotion = reduceMotion)
+        else AeroPlayStatusColors(
+            playButton = Color(0xFF6744D8),
+            favoriteActive = Color(0xFFC12968),
+            audioModeActive = Color(0xFF087A8B),
+            verifiedBadge = Color(0xFF08775A),
+            experimentalWarning = Color(0xFF92550E),
+            reduceMotion = reduceMotion
+        )
     }
 
-    CompositionLocalProvider(LocalAeroPlayStatusColors provides statusColors) {
+    CompositionLocalProvider(
+        LocalAeroPlayStatusColors provides statusColors,
+        LocalGlassLight provides !useDark
+    ) {
         MaterialTheme(
             colorScheme = colorScheme,
             typography = AeroPlayTypography,

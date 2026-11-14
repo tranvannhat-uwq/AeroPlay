@@ -49,6 +49,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
+import com.aeroplay.app.core.designsystem.GlassSurface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.aeroplay.app.BuildConfig
 import com.aeroplay.app.core.model.ContentSourceType
@@ -112,7 +114,7 @@ fun SettingsScreen(
         item {
             SettingsGroupCard(title = "Nguồn Nội Dung (Data Source)") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ContentSourceType.entries.forEach { source ->
+                    ContentSourceType.onlineSources.forEach { source ->
                         val selected = settings.activeSourceType == source
                         Surface(
                             modifier = Modifier
@@ -150,7 +152,7 @@ fun SettingsScreen(
 
         // 2. Theme Section
         item {
-            SettingsGroupCard(title = "Giao Diện (Dark / Light / System)") {
+            SettingsGroupCard(title = "Giao diện") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -323,7 +325,7 @@ fun SettingsScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(140.dp))
+            Spacer(modifier = Modifier.height(96.dp + LocalFloatingPlayerInset.current))
         }
     }
 }
@@ -333,10 +335,10 @@ private fun SettingsGroupCard(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Surface(
+    GlassSurface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface
+        elevation = 2.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(

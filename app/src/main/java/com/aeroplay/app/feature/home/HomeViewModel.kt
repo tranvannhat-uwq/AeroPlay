@@ -13,6 +13,8 @@ import com.aeroplay.app.data.repository.ContentRepository
 import com.aeroplay.app.data.repository.HistoryRepository
 import com.aeroplay.app.data.repository.PlaylistRepository
 import com.aeroplay.app.data.repository.SettingsRepository
+import com.aeroplay.app.data.repository.PersonalizedRecommendations
+import com.aeroplay.app.data.repository.PersonalizedResult
 import com.aeroplay.app.data.source.SourceErrorException
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,6 +27,8 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -41,12 +45,19 @@ data class HomeUiState(
     val error: SourceError? = null
 )
 
+data class PersonalizedUiState(
+    val loading: Boolean = true,
+    val videos: List<VideoItem> = emptyList(),
+    val message: String = ""
+)
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val contentRepository: ContentRepository,
     private val historyRepository: HistoryRepository,
     private val playlistRepository: PlaylistRepository,
     private val settingsRepository: SettingsRepository,
+    private val personalizedRecommendations: PersonalizedRecommendations,
     private val playbackController: PlaybackControllerManager
 ) : ViewModel() {
 
@@ -56,9 +67,9 @@ class HomeViewModel @Inject constructor(
     val settingsState: StateFlow<AppSettings> = settingsRepository.settingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
 
-    val recentHistory: StateFlow<List<VideoItem>> = historyRepository.observeWatchHistory()
-        .map { it.take(10) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val recommendationRefresh = MutableStateFlow(0)
+    private val personalized = MutableStateFlow(PersonalizedUiState())
+    val personalizedState = personalized.asStateFlow()
 
     val favorites: StateFlow<List<VideoItem>> = historyRepository.observeFavorites()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -85,11 +96,30 @@ class HomeViewModel @Inject constructor(
                     loadFeed(isRefresh = false, sourceType = settings.activeSourceType)
                 }
         }
+        viewModelScope.launch {
+            combine(
+                personalizedRecommendations.history,
+                settingsRepository.settingsFlow.map { it.activeSourceType }.distinctUntilChanged(),
+                recommendationRefresh
+            ) { history, source, _ -> history to source }
+                .collectLatest { (history, source) ->
+                    personalized.value = PersonalizedUiState()
+                    val result = try {
+                        personalizedRecommendations.recommendations(history, source)
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Exception) {
+                        SourceDiagnostics.failure("recommendations", error)
+                        PersonalizedResult(emptyList(), "Chưa tải được gợi ý. Kéo xuống để thử lại.")
+                    }
+                    personalized.value = PersonalizedUiState(false, result.videos, result.message)
+                }
+        }
     }
 
     fun refresh() {
         if (_uiState.value.isRefreshing) return
         val source = loadedSource ?: return
+        recommendationRefresh.value++
         loadFeed(isRefresh = true, sourceType = source)
     }
 

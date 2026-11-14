@@ -43,7 +43,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val settingsFlow: Flow<AppSettings> = context.aeroPlayDataStore.data.map { prefs ->
         val theme = prefs[Keys.THEME_MODE]?.let {
             runCatching { ThemeMode.valueOf(it) }.getOrNull()
-        } ?: ThemeMode.DARK
+        } ?: ThemeMode.LIGHT
 
         val source = prefs[Keys.SOURCE_TYPE]?.let {
             runCatching { ContentSourceType.valueOf(it) }.getOrNull()

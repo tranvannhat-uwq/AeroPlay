@@ -1,6 +1,9 @@
 package com.aeroplay.app.core.designsystem
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -8,6 +11,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -29,12 +33,8 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -54,6 +54,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -61,6 +68,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.LayoutDirection
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
 import com.aeroplay.app.core.model.ContentSourceType
@@ -69,13 +77,12 @@ import com.aeroplay.app.core.model.VideoItem
 enum class AeroPlayDestination(
     val route: String,
     val label: String,
-    val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
+    val icon: ImageVector
 ) {
-    HOME("home", "Trang chủ", Icons.Filled.Home, Icons.Outlined.Home),
-    SEARCH("search", "Tìm kiếm", Icons.Filled.Search, Icons.Outlined.Search),
-    LIBRARY("library", "Thư viện", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
-    SETTINGS("settings", "Cài đặt", Icons.Filled.Settings, Icons.Outlined.Settings)
+    HOME("home", "Trang chủ", Icons.Outlined.Home),
+    SEARCH("search", "Tìm kiếm", Icons.Outlined.Search),
+    LIBRARY("library", "Thư viện", Icons.Outlined.VideoLibrary),
+    SETTINGS("settings", "Cài đặt", Icons.Outlined.Settings)
 }
 
 @Composable
@@ -84,58 +91,78 @@ fun FloatingNavigationBar(
     onNavigate: (AeroPlayDestination) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Surface(
+    val reduceMotion = LocalAeroPlayStatusColors.current.reduceMotion
+    val destinations = AeroPlayDestination.entries
+    val selectedIndex = destinations.indexOfFirst { it.route == currentRoute }.coerceAtLeast(0)
+    val duration = if (reduceMotion) 0 else 220
+    val indicatorPosition by animateFloatAsState(
+        targetValue = selectedIndex.toFloat(),
+        animationSpec = tween(duration, easing = FastOutSlowInEasing),
+        label = "Selected tab position"
+    )
+    val activeColor = MaterialTheme.colorScheme.primary
+    val idleColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val indicatorColor = activeColor.copy(alpha = if (LocalGlassLight.current) 0.12f else 0.19f)
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 10.dp),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        tonalElevation = 8.dp,
-        shadowElevation = 12.dp
+        shape = RoundedCornerShape(30.dp),
+        elevation = 9.dp,
+        translucent = false
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+                .padding(6.dp)
+                .selectableGroup()
+                .drawBehind {
+                    val slotWidth = size.width / destinations.size
+                    val index = if (layoutDirection == LayoutDirection.Ltr) indicatorPosition
+                        else destinations.lastIndex - indicatorPosition
+                    val inset = 2.dp.toPx()
+                    drawRoundRect(
+                        color = indicatorColor,
+                        topLeft = Offset(index * slotWidth + inset, 0f),
+                        size = Size((slotWidth - 2 * inset).coerceAtLeast(0f), size.height),
+                        cornerRadius = CornerRadius(21.dp.toPx())
+                    )
+                },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AeroPlayDestination.entries.forEach { dest ->
-                val selected = currentRoute == dest.route
-                val tint = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                }
-                val bg = if (selected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-                } else {
-                    Color.Transparent
-                }
+            destinations.forEachIndexed { index, dest ->
+                val selected = selectedIndex == index
+                val tint by animateColorAsState(
+                    if (selected) activeColor else idleColor,
+                    tween(duration, easing = FastOutSlowInEasing),
+                    label = "Tab content color"
+                )
 
-                Row(
+                Column(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(bg)
-                        .clickable { onNavigate(dest) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .weight(1f)
+                        .clip(RoundedCornerShape(21.dp))
+                        .semantics { this.selected = selected }
+                        .clickable(interactionSource = null, indication = null, role = Role.Tab) {
+                            onNavigate(dest)
+                        }
+                        .padding(horizontal = 2.dp, vertical = 7.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Icon(
-                        imageVector = if (selected) dest.selectedIcon else dest.unselectedIcon,
+                        imageVector = dest.icon,
                         contentDescription = dest.label,
                         tint = tint,
                         modifier = Modifier.size(22.dp)
                     )
-                    if (selected) {
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = dest.label,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = tint
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = dest.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = tint,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }
@@ -193,21 +220,20 @@ fun VideoFeedCard(
 ) {
     val statusColors = LocalAeroPlayStatusColors.current
 
-    Card(
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(24.dp),
+        elevation = 3.dp
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(5.dp)
                     .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(20.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
@@ -250,7 +276,11 @@ fun VideoFeedCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (video.sourceType.isExperimental) "Extractor" else "Open HD",
+                            text = when (video.sourceType) {
+                                ContentSourceType.DEVICE_LOCAL -> "Trên thiết bị"
+                                ContentSourceType.EXPERIMENTAL_EXTRACTOR -> "Extractor"
+                                ContentSourceType.DEMO_LOCAL -> "Open HD"
+                            },
                             style = MaterialTheme.typography.bodySmall,
                             color = Color.White
                         )
@@ -346,13 +376,13 @@ fun CompactVideoRowCard(
 ) {
     val statusColors = LocalAeroPlayStatusColors.current
 
-    Surface(
+    GlassSurface(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface
+        elevation = 2.dp
     ) {
         Row(
             modifier = Modifier

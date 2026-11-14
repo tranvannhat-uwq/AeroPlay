@@ -49,7 +49,7 @@ class HistoryRepositoryImpl @Inject constructor(
 
     override suspend fun recordWatchAndPosition(video: VideoItem, positionMs: Long, durationMs: Long) {
         val now = System.currentTimeMillis()
-        dao.upsertHistory(
+        dao.recordHistory(
             HistoryEntity(
                 videoId = video.id,
                 url = video.url,

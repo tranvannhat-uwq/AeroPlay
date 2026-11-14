@@ -2,15 +2,19 @@ package com.aeroplay.app.feature.player
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.view.ViewGroup
-import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +29,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -79,30 +84,34 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
+import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
 import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
 import com.aeroplay.app.core.designsystem.CompactVideoRowCard
 import com.aeroplay.app.core.designsystem.ErrorStateCard
+import com.aeroplay.app.core.designsystem.GlassBackground
+import com.aeroplay.app.core.designsystem.GlassSurface
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.core.model.StreamVariant
 
-@OptIn(UnstableApi::class)
 @Composable
 fun FullPlayerOverlay(
     viewModel: PlayerViewModel,
+    videoOutput: PlayerVideoOutput,
     onEnterPip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -118,6 +127,16 @@ fun FullPlayerOverlay(
     val detail = state.currentDetail
 
     var isLandscapeFullscreen by remember { mutableStateOf(false) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var draggingPlayer by remember { mutableStateOf(false) }
+    val (dismissDistance, flingDistance, minFlingDrag) = with(LocalDensity.current) {
+        Triple(76.dp.toPx(), 820.dp.toPx(), 24.dp.toPx())
+    }
+    val playerOffset by animateFloatAsState(
+        targetValue = dragOffset,
+        animationSpec = if (draggingPlayer || statusColors.reduceMotion) snap() else spring(dampingRatio = 0.86f),
+        label = "Player drag"
+    )
     var showControlsOverlay by remember { mutableStateOf(true) }
     var showQualityDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
@@ -126,6 +145,10 @@ fun FullPlayerOverlay(
 
     var isUserDraggingSeek by remember { mutableStateOf(false) }
     var dragSeekPositionMs by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(state.isFullPlayerOpen, state.isInPipMode) {
+        if (state.isFullPlayerOpen || state.isInPipMode) dragOffset = 0f
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -150,22 +173,10 @@ fun FullPlayerOverlay(
                 .background(Color.Black),
             contentAlignment = Alignment.Center
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
-                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }
-                },
-                update = { view ->
-                    if (view.player !== player) {
-                        view.player = player
-                    }
-                },
+            PlayerVideoSurface(
+                player = player,
+                output = videoOutput,
+                active = true,
                 modifier = Modifier.fillMaxSize()
             )
         }
@@ -210,10 +221,16 @@ fun FullPlayerOverlay(
         )
     }
 
-    Surface(
-        modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    Box(
+        modifier = modifier.fillMaxSize().graphicsLayer {
+            translationY = playerOffset
+            val shrink = if (statusColors.reduceMotion) 0f else (playerOffset / size.height.coerceAtLeast(1f)).coerceAtMost(0.15f)
+            scaleX = 1f - shrink
+            scaleY = 1f - shrink
+            transformOrigin = TransformOrigin(0.5f, 0f)
+        }
     ) {
+        GlassBackground()
         Column(modifier = Modifier.fillMaxSize()) {
             // 1. Video / Audio Stage
             val videoBoxModifier = if (isLandscapeFullscreen) {
@@ -228,9 +245,25 @@ fun FullPlayerOverlay(
             }
 
             Box(
-                modifier = videoBoxModifier.clickable {
-                    showControlsOverlay = !showControlsOverlay
-                }
+                modifier = videoBoxModifier
+                    .testTag("FullVideoStage")
+                    .draggable(
+                        state = rememberDraggableState { delta ->
+                            dragOffset = (dragOffset + delta).coerceAtLeast(0f)
+                        },
+                        orientation = Orientation.Vertical,
+                        enabled = !isLandscapeFullscreen && state.isFullPlayerOpen,
+                        onDragStarted = { draggingPlayer = true },
+                        onDragStopped = { velocity ->
+                            draggingPlayer = false
+                            if (dragOffset >= dismissDistance || (dragOffset >= minFlingDrag && velocity > flingDistance)) {
+                                viewModel.minimizePlayer()
+                            } else {
+                                dragOffset = 0f
+                            }
+                        }
+                    )
+                    .clickable { showControlsOverlay = !showControlsOverlay }
             ) {
                 if (state.isAudioOnlyMode) {
                     // Audio-Only Mode Visual Stage (genuinely playing audio track to save data)
@@ -279,23 +312,10 @@ fun FullPlayerOverlay(
                         }
                     }
                 } else {
-                    AndroidView(
-                        factory = { ctx ->
-                            PlayerView(ctx).apply {
-                                useController = false
-                                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                                keepScreenOn = true
-                                layoutParams = FrameLayout.LayoutParams(
-                                    ViewGroup.LayoutParams.MATCH_PARENT,
-                                    ViewGroup.LayoutParams.MATCH_PARENT
-                                )
-                            }
-                        },
-                        update = { playerView ->
-                            if (playerView.player !== player) {
-                                playerView.player = player
-                            }
-                        },
+                    PlayerVideoSurface(
+                        player = player,
+                        output = videoOutput,
+                        active = state.isFullPlayerOpen,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -320,7 +340,11 @@ fun FullPlayerOverlay(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.45f))
+                            .background(Brush.verticalGradient(listOf(
+                                Color.Black.copy(alpha = 0.67f),
+                                Color(0x45150F30),
+                                Color.Black.copy(alpha = 0.76f)
+                            )))
                     ) {
                         // Top Bar inside video stage
                         Row(
@@ -617,13 +641,13 @@ fun FullPlayerOverlay(
 
                     // Channel Row & Expandable Description
                     item {
-                        Surface(
+                        GlassSurface(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(16.dp))
                                 .clickable { isDescriptionExpanded = !isDescriptionExpanded },
                             shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surface
+                            elevation = 2.dp
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Row(
@@ -755,6 +779,8 @@ fun FullPlayerOverlay(
 @Composable
 fun MiniPlayerBar(
     state: PlaybackState,
+    player: Player?,
+    videoOutput: PlayerVideoOutput,
     onExpand: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -763,6 +789,15 @@ fun MiniPlayerBar(
 ) {
     val currentVideo = state.currentVideo ?: return
     val statusColors = LocalAeroPlayStatusColors.current
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    val gestureThreshold = with(LocalDensity.current) { 34.dp.toPx() }
+    val dragLimit = with(LocalDensity.current) { 62.dp.toPx() }
+    val offset by animateFloatAsState(
+        targetValue = dragOffset,
+        animationSpec = if (dragging || statusColors.reduceMotion) snap() else spring(dampingRatio = 0.83f),
+        label = "Mini player drag"
+    )
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -781,127 +816,122 @@ fun MiniPlayerBar(
         dismissState.reset()
     }
 
-    SwipeToDismissBox(
-        state = dismissState,
-        backgroundContent = {},
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
-                .clickable { onExpand() },
-            shape = RoundedCornerShape(18.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 10.dp,
-            shadowElevation = 8.dp
+    Box(modifier.fillMaxWidth().padding(horizontal = 18.dp), contentAlignment = Alignment.CenterEnd) {
+        SwipeToDismissBox(
+            state = dismissState,
+            backgroundContent = {},
+            modifier = Modifier.widthIn(max = 216.dp).fillMaxWidth()
         ) {
-            Column {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            GlassSurface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("FloatingVideoPlayer")
+                    .graphicsLayer { translationY = offset }
+                    .draggable(
+                        state = rememberDraggableState { delta ->
+                            dragOffset = (dragOffset + delta * 0.65f).coerceIn(-dragLimit, dragLimit)
+                        },
+                        orientation = Orientation.Vertical,
+                        onDragStarted = { dragging = true },
+                        onDragStopped = {
+                            dragging = false
+                            when {
+                                dragOffset <= -gestureThreshold -> onExpand()
+                                dragOffset >= gestureThreshold -> onDismiss()
+                            }
+                            dragOffset = 0f
+                        }
+                    ),
+                shape = RoundedCornerShape(22.dp),
+                elevation = 11.dp
+            ) {
+                Column {
                     Box(
                         modifier = Modifier
-                            .size(width = 68.dp, height = 42.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .fillMaxWidth()
+                            .padding(5.dp)
+                            .aspectRatio(16f / 9f)
+                            .clip(RoundedCornerShape(17.dp))
                             .background(Color.Black)
+                            .clickable(onClickLabel = "Mở rộng trình phát", onClick = onExpand)
                     ) {
-                        AsyncImage(
-                            model = currentVideo.thumbnailUrl,
-                            contentDescription = currentVideo.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                        if (state.isAudioOnlyMode) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color.Black.copy(alpha = 0.55f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Headphones,
-                                    contentDescription = null,
-                                    tint = statusColors.audioModeActive,
-                                    modifier = Modifier.size(18.dp)
-                                )
+                        if (state.isAudioOnlyMode || state.isLoadingMetadata || state.error != null) {
+                            AsyncImage(
+                                model = currentVideo.thumbnailUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            PlayerVideoSurface(player, videoOutput, state.isMiniPlayerVisible, Modifier.fillMaxSize())
+                        }
+                        if (state.isBuffering || state.isLoadingMetadata) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.Center).size(24.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                        Surface(
+                            modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
+                            shape = CircleShape,
+                            color = Color(0xA623193A)
+                        ) {
+                            IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
+                                Icon(Icons.Filled.Close, "Đóng trình phát", tint = Color.White, modifier = Modifier.size(19.dp))
                             }
                         }
+                        if (state.isAudioOnlyMode) {
+                            Icon(
+                                Icons.Filled.Headphones,
+                                "Chỉ âm thanh",
+                                tint = Color.White,
+                                modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).size(20.dp)
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = {
+                                if (state.durationMs > 0) (state.currentPositionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
+                            },
+                            modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.BottomCenter),
+                            color = Color(0xFFC5A5FF),
+                            trackColor = Color.White.copy(alpha = 0.27f)
+                        )
                     }
-
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             text = currentVideo.title,
                             style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).clickable(
+                                onClickLabel = "Mở rộng trình phát", onClick = onExpand
+                            )
                         )
-                        Text(
-                            text = if (state.isAudioOnlyMode) {
-                                "Chỉ âm thanh • ${currentVideo.channelName}"
-                            } else {
-                                currentVideo.channelName
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (state.isAudioOnlyMode) {
-                                statusColors.audioModeActive
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
 
-                    IconButton(onClick = onTogglePlayPause) {
-                        Icon(
-                            imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                            contentDescription = "Phát / Tạm dừng",
-                            tint = statusColors.playButton
-                        )
-                    }
-
-                    if (state.queue.hasNext) {
-                        IconButton(onClick = onNext) {
+                        IconButton(onClick = onTogglePlayPause) {
                             Icon(
-                                imageVector = Icons.Filled.SkipNext,
-                                contentDescription = "Bài tiếp theo",
-                                tint = MaterialTheme.colorScheme.onSurface
+                                imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                contentDescription = "Phát / Tạm dừng",
+                                tint = statusColors.playButton
                             )
                         }
-                    }
 
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = "Đóng trình phát",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        if (state.queue.hasNext) {
+                            IconButton(onClick = onNext) {
+                                Icon(
+                                    imageVector = Icons.Filled.SkipNext,
+                                    contentDescription = "Bài tiếp theo",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
                     }
                 }
-
-                val progress = if (state.durationMs > 0L) {
-                    (state.currentPositionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f)
-                } else {
-                    0f
-                }
-
-                LinearProgressIndicator(
-                    progress = { progress },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp),
-                    color = statusColors.playButton,
-                    trackColor = MaterialTheme.colorScheme.surface
-                )
             }
         }
     }

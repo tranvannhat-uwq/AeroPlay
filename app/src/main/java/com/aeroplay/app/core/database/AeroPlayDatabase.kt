@@ -10,9 +10,10 @@ import androidx.room.RoomDatabase
         PlaylistEntity::class,
         PlaylistVideoEntity::class,
         PlaybackPositionEntity::class,
-        SearchHistoryEntity::class
+        SearchHistoryEntity::class,
+        DeviceVideoEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AeroPlayDatabase : RoomDatabase() {

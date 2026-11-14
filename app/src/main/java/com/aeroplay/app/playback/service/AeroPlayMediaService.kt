@@ -106,6 +106,7 @@ class AeroPlayMediaService : MediaSessionService() {
             .setMediaSourceFactory(adaptiveMergingMediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
 
         exoPlayer.addListener(object : Player.Listener {

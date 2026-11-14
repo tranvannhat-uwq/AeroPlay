@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
@@ -351,7 +352,7 @@ fun SearchScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(140.dp))
+                Spacer(modifier = Modifier.height(96.dp + LocalFloatingPlayerInset.current))
             }
         }
     }

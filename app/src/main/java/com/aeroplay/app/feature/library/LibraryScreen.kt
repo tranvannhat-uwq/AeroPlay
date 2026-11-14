@@ -1,7 +1,12 @@
 package com.aeroplay.app.feature.library
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,12 +32,17 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -49,10 +59,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.designsystem.CompactVideoRowCard
+import com.aeroplay.app.core.designsystem.GlassSurface
 import com.aeroplay.app.core.model.UserPlaylist
+import com.aeroplay.app.core.model.VideoItem
 
 @Composable
 fun LibraryScreen(
@@ -67,9 +80,54 @@ fun LibraryScreen(
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val selectedPlaylistId by viewModel.selectedPlaylistId.collectAsStateWithLifecycle()
     val selectedPlaylistVideos by viewModel.selectedPlaylistVideos.collectAsStateWithLifecycle()
+    val deviceVideos by viewModel.deviceVideos.collectAsStateWithLifecycle()
+    val mediaImport by viewModel.mediaImport.collectAsStateWithLifecycle()
+    val backgroundPlaybackEnabled by viewModel.backgroundPlaybackEnabled.collectAsStateWithLifecycle()
+    val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(50)) {
+        viewModel.importVideos(it)
+    }
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) {
+        viewModel.importVideos(it)
+    }
 
     var showCreatePlaylistDialog by remember { mutableStateOf(false) }
     var editingPlaylist by remember { mutableStateOf<UserPlaylist?>(null) }
+    var removingDeviceVideo by remember { mutableStateOf<VideoItem?>(null) }
+    var renamingDeviceVideo by remember { mutableStateOf<VideoItem?>(null) }
+    var deviceVideoName by remember { mutableStateOf("") }
+
+    renamingDeviceVideo?.let { video ->
+        AlertDialog(
+            onDismissRequest = { renamingDeviceVideo = null },
+            title = { Text("Đổi tên video") },
+            text = {
+                OutlinedTextField(deviceVideoName, onValueChange = { deviceVideoName = it },
+                    label = { Text("Tên video") }, singleLine = true)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.renameDeviceVideo(video.id, deviceVideoName)
+                    renamingDeviceVideo = null
+                }, enabled = deviceVideoName.isNotBlank()) { Text("Lưu") }
+            },
+            dismissButton = { TextButton(onClick = { renamingDeviceVideo = null }) { Text("Hủy") } }
+        )
+    }
+
+    removingDeviceVideo?.let { video ->
+        AlertDialog(
+            onDismissRequest = { removingDeviceVideo = null },
+            title = { Text("Xóa video khỏi AeroPlay?") },
+            text = { Text("Bản sao “${video.title}” trong AeroPlay sẽ được xóa. Video gốc trong Ảnh vẫn được giữ.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.removeDeviceVideo(video.id)
+                    removingDeviceVideo = null
+                }) { Text("Xóa bản sao") }
+            },
+            dismissButton = { TextButton(onClick = { removingDeviceVideo = null }) { Text("Hủy") } }
+        )
+    }
 
     if (showCreatePlaylistDialog) {
         PlaylistEditDialog(
@@ -107,32 +165,41 @@ fun LibraryScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "Thư viện cá nhân",
                     style = MaterialTheme.typography.headlineMedium
                 )
                 Text(
-                    text = "Lưu trữ cục bộ bằng Room Database • Không cần tài khoản",
+                    text = "Lưu trên thiết bị • Không cần tài khoản",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            if (selectedTab == LibraryTab.PLAYLISTS && selectedPlaylistId == null) {
+            if (selectedTab == LibraryTab.DEVICE) {
+                Button(
+                    onClick = { videoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly)) },
+                    enabled = !mediaImport.busy
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Thêm video", maxLines = 1, softWrap = false)
+                }
+            } else if (selectedTab == LibraryTab.PLAYLISTS && selectedPlaylistId == null) {
                 Button(onClick = { showCreatePlaylistDialog = true }) {
                     Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Tạo mới")
+                    Text("Tạo mới", maxLines = 1, softWrap = false)
                 }
             } else if (selectedTab == LibraryTab.HISTORY && history.isNotEmpty()) {
                 TextButton(onClick = { viewModel.clearAllHistory() }) {
                     Icon(Icons.Filled.DeleteSweep, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Xóa lịch sử")
+                    Text("Xóa lịch sử", maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -171,6 +238,7 @@ fun LibraryScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -193,6 +261,88 @@ fun LibraryScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             when (selectedTab) {
+                LibraryTab.DEVICE -> {
+                    item {
+                        GlassSurface(shape = RoundedCornerShape(20.dp)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Icon(Icons.Filled.VideoLibrary, null, tint = MaterialTheme.colorScheme.primary)
+                                Text("Video của bạn, luôn sẵn sàng", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    "Chọn video từ Ảnh hoặc Tệp. AeroPlay lưu một bản sao trên thiết bị để phát ngoại tuyến, khi tắt màn hình hoặc dùng ứng dụng khác.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (!backgroundPlaybackEnabled) {
+                                    Text("Phát nền đang tắt.", style = MaterialTheme.typography.bodySmall)
+                                    TextButton(onClick = viewModel::enableBackgroundPlayback) { Text("Bật phát nền") }
+                                }
+                                if (mediaImport.busy) {
+                                    val progress = mediaImport.progress
+                                    if (progress == null) LinearProgressIndicator(Modifier.fillMaxWidth())
+                                    else LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth())
+                                    Text(
+                                        "Đã xử lý ${mediaImport.completed}/${mediaImport.total} video",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                if (mediaImport.message.isNotBlank()) Text(mediaImport.message, style = MaterialTheme.typography.bodySmall)
+                                TextButton(onClick = { filePicker.launch(arrayOf("video/*")) }, enabled = !mediaImport.busy) {
+                                    Text("Chọn từ Tệp")
+                                }
+                            }
+                        }
+                    }
+                    val filtered = deviceVideos.filter {
+                        trimmedFilter.isEmpty() || it.title.contains(trimmedFilter, ignoreCase = true)
+                    }
+                    if (filtered.isEmpty()) {
+                        item {
+                            EmptyLibraryCard(
+                                if (trimmedFilter.isNotEmpty()) "Không có video khớp từ khóa này."
+                                else "Chưa có video từ thiết bị. Nhấn Thêm video để chọn từ Ảnh."
+                            )
+                        }
+                    } else {
+                        item {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("${filtered.size} video", Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                                TextButton(onClick = { viewModel.playVideo(filtered.first(), filtered, "Video từ thiết bị") }) {
+                                    Icon(Icons.Filled.PlayArrow, null)
+                                    Text("Phát tất cả")
+                                }
+                            }
+                        }
+                        items(filtered, key = { "device_${it.id}" }) { video ->
+                            CompactVideoRowCard(
+                                video = video,
+                                savedProgressFraction = savedPositions[video.id]?.progressFraction ?: 0f,
+                                onClick = { viewModel.playVideo(video, filtered, "Video từ thiết bị") },
+                                trailingContent = {
+                                    var menuOpen by remember { mutableStateOf(false) }
+                                    Box {
+                                        IconButton(onClick = { menuOpen = true }) {
+                                            Icon(Icons.Filled.MoreVert, "Tùy chọn video")
+                                        }
+                                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                                            DropdownMenuItem(
+                                                text = { Text("Đổi tên") },
+                                                onClick = {
+                                                    menuOpen = false
+                                                    deviceVideoName = video.title
+                                                    renamingDeviceVideo = video
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Xóa khỏi AeroPlay") },
+                                                onClick = { menuOpen = false; removingDeviceVideo = video }
+                                            )
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
                 LibraryTab.HISTORY -> {
                     val filtered = history.filter {
                         trimmedFilter.isEmpty() ||
@@ -423,7 +573,7 @@ fun LibraryScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(140.dp))
+                Spacer(modifier = Modifier.height(96.dp + LocalFloatingPlayerInset.current))
             }
         }
     }
