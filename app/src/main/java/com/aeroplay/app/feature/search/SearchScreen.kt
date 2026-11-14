@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,6 +42,9 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -97,7 +103,9 @@ fun SearchScreen(
         OutlinedTextField(
             value = uiState.query,
             onValueChange = { viewModel.onQueryChange(it) },
-            placeholder = { Text("Nhập từ khóa video, bài hát, kênh...") },
+            placeholder = {
+                Text(if (uiState.source.isExperimental) "Nhập từ khóa video, bài hát, kênh..." else "Tìm trong danh mục Chuẩn Mở")
+            },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Filled.Search,
@@ -152,10 +160,10 @@ fun SearchScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Content Area
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+        SearchResultsList(
+            isRefreshing = uiState.isRefreshing,
+            canRefresh = uiState.query.isNotBlank() && !uiState.isLoading,
+            onRefresh = viewModel::refresh
         ) {
             // Local Search History Suggestions when query is empty
             if (uiState.query.trim().isEmpty()) {
@@ -278,6 +286,24 @@ fun SearchScreen(
                         val showVideos = uiState.activeFilter == SearchFilterTab.ALL ||
                             uiState.activeFilter == SearchFilterTab.VIDEOS
 
+                        val hasVisibleResults = (showVideos && uiState.videos.isNotEmpty()) ||
+                            (showChannels && uiState.channels.isNotEmpty()) ||
+                            (showPlaylists && uiState.playlists.isNotEmpty())
+
+                        if (!hasVisibleResults && !uiState.isRefreshing) {
+                            item {
+                                Column(Modifier.fillMaxWidth().padding(vertical = 24.dp)) {
+                                    Text("Không có kết quả", style = MaterialTheme.typography.titleMedium)
+                                    Text(
+                                        if (uiState.source.isExperimental) "Hãy thử từ khóa khác hoặc chọn bộ lọc Tất cả."
+                                        else "Chuẩn Mở chỉ tìm trong danh mục có sẵn. Hãy thử Sintel, Blender hoặc chọn bộ lọc Tất cả.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
                         if (showChannels && uiState.channels.isNotEmpty()) {
                             items(uiState.channels, key = { "ch_${it.id}" }) { channel ->
                                 ChannelResultRow(channel = channel)
@@ -327,6 +353,39 @@ fun SearchScreen(
             item {
                 Spacer(modifier = Modifier.height(140.dp))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchResultsList(
+    isRefreshing: Boolean,
+    canRefresh: Boolean,
+    onRefresh: () -> Unit,
+    content: LazyListScope.() -> Unit
+) {
+    val refreshState = rememberPullToRefreshState()
+    Box(
+        Modifier.fillMaxSize().pullToRefresh(
+            isRefreshing = isRefreshing,
+            state = refreshState,
+            enabled = canRefresh,
+            onRefresh = onRefresh
+        )
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            content = content
+        )
+        if (isRefreshing || refreshState.distanceFraction > 0f) {
+            PullToRefreshDefaults.Indicator(
+                state = refreshState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter).testTag("PullToRefreshIndicator")
+            )
         }
     }
 }

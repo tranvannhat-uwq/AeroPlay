@@ -7,6 +7,8 @@ import com.aeroplay.app.core.model.SearchResultBundle
 import com.aeroplay.app.core.model.SourceError
 import com.aeroplay.app.core.model.VideoDetail
 import com.aeroplay.app.core.model.VideoItem
+import java.text.Normalizer
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,6 +21,13 @@ import javax.inject.Singleton
 class DemoLocalMediaSource @Inject constructor() {
 
     private val demoVideos: List<VideoDetail> = OpenMediaCatalog.videos
+    private val accents = Regex("\\p{M}+")
+    private val separators = Regex("[^\\p{L}\\p{N}]+")
+
+    private fun normalize(text: String): String =
+        accents.replace(Normalizer.normalize(text, Normalizer.Form.NFD), "")
+            .lowercase(Locale.ROOT)
+            .replace('đ', 'd')
 
     private fun VideoDetail.toSummaryItem(): VideoItem = VideoItem(
         id = id,
@@ -40,16 +49,16 @@ class DemoLocalMediaSource @Inject constructor() {
     }
 
     fun search(query: String): SearchResultBundle {
-        val trimmed = query.trim()
-        val matchedVideos = if (trimmed.isBlank()) {
-            demoVideos.map { it.toSummaryItem() }
-        } else {
-            demoVideos.filter {
-                it.title.contains(trimmed, ignoreCase = true) ||
-                    it.channelName.contains(trimmed, ignoreCase = true) ||
-                    it.description.contains(trimmed, ignoreCase = true)
-            }.map { it.toSummaryItem() }
+        val terms = normalize(query).split(separators).filter { it.isNotEmpty() }
+        fun matches(vararg fields: String): Boolean {
+            if (terms.isEmpty()) return query.isBlank()
+            val searchable = normalize(fields.joinToString(" "))
+            return terms.all { it in searchable }
         }
+
+        val matchedVideos = demoVideos.filter {
+            matches(it.title, it.channelName, it.description, it.url)
+        }.map { it.toSummaryItem() }
 
         val channels = listOf(
             ChannelItem(
@@ -61,7 +70,7 @@ class DemoLocalMediaSource @Inject constructor() {
                 streamCount = 4L,
                 sourceType = ContentSourceType.DEMO_LOCAL
             )
-        ).filter { trimmed.isBlank() || it.name.contains(trimmed, ignoreCase = true) }
+        ).filter { matches(it.name, it.description, it.url) }
 
         val playlists = listOf(
             PlaylistItem(
@@ -73,7 +82,7 @@ class DemoLocalMediaSource @Inject constructor() {
                 streamCount = 4L,
                 sourceType = ContentSourceType.DEMO_LOCAL
             )
-        ).filter { trimmed.isBlank() || it.title.contains(trimmed, ignoreCase = true) }
+        ).filter { matches(it.title, it.uploaderName, it.url) }
 
         return SearchResultBundle(
             query = query,

@@ -38,6 +38,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +51,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,6 +84,7 @@ fun HomeScreen(
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     val savedPositions by viewModel.savedPositions.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val refreshState = rememberPullToRefreshState()
 
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
     var showSourceSwitchDialog by remember { mutableStateOf(false) }
@@ -109,7 +113,17 @@ fun HomeScreen(
     PullToRefreshBox(
         isRefreshing = uiState.isRefreshing,
         onRefresh = { viewModel.refresh() },
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize(),
+        state = refreshState,
+        indicator = {
+            if (uiState.isRefreshing || refreshState.distanceFraction > 0f) {
+                PullToRefreshDefaults.Indicator(
+                    state = refreshState,
+                    isRefreshing = uiState.isRefreshing,
+                modifier = Modifier.align(Alignment.TopCenter).testTag("PullToRefreshIndicator")
+                )
+            }
+        }
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

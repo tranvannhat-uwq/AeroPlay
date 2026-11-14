@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -25,7 +26,7 @@ class OpenMediaUiTest {
     @Test fun switchToOpenMediaShowsHomeAndSearchResults() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val graph = EntryPointAccessors.fromApplication(context, YouTubeTestEntryPoint::class.java)
-        val previousTheme = runBlocking { graph.settings().getSettingsSnapshot().themeMode }
+        val previousSettings = runBlocking { graph.settings().getSettingsSnapshot() }
         runBlocking {
             graph.settings().setThemeMode(ThemeMode.LIGHT)
             graph.settings().setActiveSourceType(ContentSourceType.EXPERIMENTAL_EXTRACTOR)
@@ -45,8 +46,14 @@ class OpenMediaUiTest {
             compose.onAllNodesWithText(title).onLast().performScrollTo().assertIsDisplayed()
             screenshot(context, "open-media-home")
             Log.i("AeroPlayTest", "OPEN_MEDIA_HOME_VISIBLE")
+            val homeList = compose.onAllNodes(hasScrollToIndexAction()).onFirst()
+            homeList.performScrollToIndex(0)
+            repeat(2) {
+                homeList.performTouchInput { swipeDown(startY = height * 0.2f, endY = height * 0.7f) }
+                waitForRefreshToFinish()
+            }
             compose.onAllNodesWithContentDescription("Tìm kiếm").onLast().performClick()
-            compose.onNode(hasSetTextAction()).performTextReplacement("Big Buck Bunny")
+            compose.onNode(hasSetTextAction()).performTextReplacement("bunny phim hoat hinh")
             compose.onNode(hasSetTextAction()).performImeAction()
             compose.waitUntil(10_000) {
                 compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty()
@@ -54,9 +61,33 @@ class OpenMediaUiTest {
             compose.onAllNodesWithText(title).onLast().assertIsDisplayed()
             screenshot(context, "open-media-search")
             Log.i("AeroPlayTest", "OPEN_MEDIA_SEARCH_VISIBLE")
+            val searchList = compose.onNode(
+                hasScrollToIndexAction() and SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange)
+            )
+            searchList.performTouchInput { swipeDown(startY = height * 0.15f, endY = height * 0.8f) }
+            waitForRefreshToFinish()
+            compose.onAllNodesWithText(title).onLast().assertIsDisplayed()
+            compose.onNodeWithText("Kênh").performClick()
+            compose.onNodeWithText("Không có kết quả").assertIsDisplayed()
+            compose.onNodeWithText("Tất cả").performClick()
+            compose.onNodeWithText(title).assertIsDisplayed()
+            compose.onNode(hasSetTextAction()).performTextReplacement("xyz123khongcotrongdanhmuc")
+            compose.waitUntil(4_000) {
+                compose.onAllNodesWithText("Không có kết quả").fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText("Không có kết quả").assertIsDisplayed()
         } finally {
             activity.close()
-            runBlocking { graph.settings().setThemeMode(previousTheme) }
+            runBlocking {
+                graph.settings().setThemeMode(previousSettings.themeMode)
+                graph.settings().setActiveSourceType(previousSettings.activeSourceType)
+            }
+        }
+    }
+
+    private fun waitForRefreshToFinish() {
+        compose.waitUntil(4_000) {
+            compose.onAllNodesWithTag("PullToRefreshIndicator", useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
         }
     }
 

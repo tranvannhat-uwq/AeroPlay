@@ -17,6 +17,9 @@ import com.aeroplay.app.data.source.SourceErrorException
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -27,7 +30,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
+import kotlin.coroutines.coroutineContext
 
 data class HomeUiState(
     val isLoading: Boolean = true,
@@ -83,7 +88,9 @@ class HomeViewModel @Inject constructor(
     }
 
     fun refresh() {
-        loadFeed(isRefresh = true, sourceType = settingsState.value.activeSourceType)
+        if (_uiState.value.isRefreshing) return
+        val source = loadedSource ?: return
+        loadFeed(isRefresh = true, sourceType = source)
     }
 
     private fun loadFeed(isRefresh: Boolean, sourceType: ContentSourceType) {
@@ -100,10 +107,21 @@ class HomeViewModel @Inject constructor(
                 )
             }
 
-            val result = contentRepository.getHomeFeed(sourceType)
+            val result = try {
+                withTimeoutOrNull(30_000L) { contentRepository.getHomeFeed(sourceType) }
+                    ?: Result.failure(SourceErrorException(SourceError.NetworkError("Tải danh sách quá lâu. Hãy thử lại.")))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Result.failure(error)
+            }
+            // The local catalog can return in the same frame. Keep the indicator visible
+            // briefly so Material3 observes both the start and end of a refresh.
+            if (isRefresh && sourceType == ContentSourceType.DEMO_LOCAL) delay(350L)
+            coroutineContext.ensureActive()
             result.fold(
                 onSuccess = { videos ->
-                    SourceDiagnostics.event("home.ui", "videos=${videos.size} source=$sourceType")
+                    SourceDiagnostics.event("home.ui", "videos=${videos.size} source=$sourceType refresh=$isRefresh")
                     _uiState.update {
                         it.copy(
                             isLoading = false,
