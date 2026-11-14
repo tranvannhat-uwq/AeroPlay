@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">AeroPlay</string>
+    <string name="notification_channel_name">AeroPlay Phát Đa Phương Tiện</string>
+    <string name="notification_channel_description">Điều khiển phát video và nhạc nền AeroPlay</string>
+    <string name="pip_play">Phát</string>
+    <string name="pip_pause">Tạm dừng</string>
+</resources>

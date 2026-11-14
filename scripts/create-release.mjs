@@ -1,0 +1,37 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+
+const root = path.resolve(import.meta.dirname, '..');
+const value = fs.readFileSync(path.join(root, 'version.properties'), 'utf8');
+const version = value.match(/^VERSION_NAME=(.+)$/m)?.[1].trim();
+const code = Number(value.match(/^VERSION_CODE=(\d+)$/m)?.[1]);
+if (!version?.match(/^\d+\.\d+\.\d+$/) || !Number.isInteger(code) || code < 1) throw new Error('Invalid version.properties');
+if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME !== `v${version}`) throw new Error('Tag must match VERSION_NAME');
+const apk = path.resolve(root, process.argv[2] || 'app/build/outputs/apk/release/app-release.apk');
+const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT;
+if (!sdk) throw new Error('Set ANDROID_HOME to the Android SDK directory');
+const directories = fs.readdirSync(path.join(sdk, 'build-tools')).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
+const buildTools = directories.map(x => path.join(sdk, 'build-tools', x)).find(x => fs.existsSync(path.join(x, process.platform === 'win32' ? 'aapt.exe' : 'aapt')));
+if (!buildTools) throw new Error('Android build-tools not found');
+const badging = execFileSync(path.join(buildTools, process.platform === 'win32' ? 'aapt.exe' : 'aapt'), ['dump', 'badging', apk], { encoding: 'utf8' });
+const info = badging.match(/package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'/);
+if (!info || info[1] !== 'com.aeroplay.app' || Number(info[2]) !== code || info[3] !== version) throw new Error('APK package/version does not match version.properties');
+const java = process.env.JAVA_HOME ? path.join(process.env.JAVA_HOME, 'bin', process.platform === 'win32' ? 'java.exe' : 'java') : 'java';
+const signature = execFileSync(java, ['-jar', path.join(buildTools, 'lib', 'apksigner.jar'), 'verify', '--print-certs', apk], { encoding: 'utf8' });
+const digest = signature.match(/certificate SHA-256 digest:\s*([a-f0-9]+)/i)?.[1].toLowerCase();
+const expected = fs.readFileSync(path.join(root, 'signing-certificate-sha256.txt'), 'utf8').trim().toLowerCase();
+if (digest !== expected) throw new Error('APK certificate does not match the installed AeroPlay signing identity');
+const directory = path.join(root, 'dist');
+fs.mkdirSync(directory, { recursive: true });
+const name = `AeroPlay-v${version}.apk`;
+fs.copyFileSync(apk, path.join(directory, name));
+const bytes = fs.readFileSync(apk);
+const hash = crypto.createHash('sha256').update(bytes).digest('hex');
+const metadata = { schemaVersion: 1, packageName: info[1], versionCode: code, versionName: version,
+  minSdk: Number(badging.match(/sdkVersion:'(\d+)'/)?.[1]), apkName: name, size: bytes.length, sha256: hash };
+if (metadata.minSdk !== 26) throw new Error('Expected minSdk 26');
+fs.writeFileSync(path.join(directory, 'update.json'), JSON.stringify(metadata, null, 2) + '\n');
+fs.writeFileSync(path.join(directory, 'SHA256SUMS.txt'), `${hash}  ${name}\n`);
+console.log(`Prepared ${name}, update.json and SHA256SUMS.txt; signing identity verified.`);
