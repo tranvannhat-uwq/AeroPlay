@@ -1,3 +1,12 @@
+AeroPlay 2.0.1
+
+- Đề xuất radio nhạc theo phong cách bài đang phát; giảm lặp cùng ca khúc/kênh và bổ sung gợi ý bài phổ biến, playlist khi nguồn trả dữ liệu.
+- Tích hợp tài khoản YouTube chỉ đọc: video đã thích, playlist, video trong playlist và kênh đăng ký; làm mới/xóa cache khi đăng xuất.
+- Bản tài khoản dùng YouTube Data API và khóa phát YouTube qua NewPipe/Media3; mở video bằng YouTube hoặc trình duyệt. Nguồn media khác vẫn dùng trình phát AeroPlay.
+- Đăng nhập hiện cần OAuth Consent Screen ở trạng thái phù hợp và tài khoản thử nghiệm được khai báo. Luồng Google và dữ liệu tài khoản thật chưa được kiểm thử trên điện thoại trong quá trình tạo bản này.
+
+Cài đè bản cũ để giữ dữ liệu nếu chữ ký APK khớp. Android 8 trở lên.
+
 AeroPlay 2.0.0
 
 - Tìm kiếm hiểu truy vấn tiếng Việt có dấu/không dấu và nhận diện ý định mới nhất, phổ biến, âm nhạc, kênh, playlist, tên riêng.

@@ -35,12 +35,14 @@ Không chỉ upload APK vào một thư mục của repository: updater đọc *
 
 Khóa ký tương thích với APK đã gửi trước đã được lưu riêng ở `.private/aeroplay-release.p12`; cấu hình local ở `.private/signing.properties`. Hai tệp này được Git bỏ qua và không nằm trong source ZIP. Hãy lưu bản sao riêng của chúng; không upload vào repository public.
 
-GitHub Actions đã được cấu hình các secrets: `AEROPLAY_KEYSTORE_BASE64`, `AEROPLAY_KEYSTORE_PASSWORD`, `AEROPLAY_KEY_ALIAS`, `AEROPLAY_KEY_PASSWORD`. Workflow khôi phục khóa vào thư mục tạm của runner rồi xóa sau build. Fingerprint công khai được ghim trong `signing-certificate-sha256.txt` để không phát hành nhầm APK khác khóa. Không tạo khóa mới nếu còn cần cập nhật đè lên bản người dùng đang cài.
+GitHub Actions cần các secrets: `AEROPLAY_KEYSTORE_BASE64`, `AEROPLAY_KEYSTORE_PASSWORD`, `AEROPLAY_KEY_ALIAS`, `AEROPLAY_KEY_PASSWORD`, cùng repository variable `YOUTUBE_OAUTH_WEB_CLIENT_ID` (Web application Client ID công khai). Đặt variable tại **Settings → Secrets and variables → Actions → Variables**. Workflow khôi phục khóa vào thư mục tạm của runner rồi xóa sau build; bản phát hành bật tài khoản YouTube và API-only mode. Fingerprint công khai được ghim trong `signing-certificate-sha256.txt` để không phát hành nhầm APK khác khóa. Không tạo khóa mới nếu còn cần cập nhật đè lên bản người dùng đang cài.
 
-Build local bằng JDK 17 hoặc 21 và Android SDK 35:
+Build local bằng JDK 17 hoặc 21, Android SDK 35, và cùng Web Client ID:
 
 ```shell
-./gradlew testDebugUnitTest assembleRelease
+./gradlew testDebugUnitTest assembleRelease \
+  -PyoutubeOAuthWebClientId="$YOUTUBE_OAUTH_WEB_CLIENT_ID" \
+  -PyoutubeAccountSyncEnabled=true -PyoutubeApiOnlyMode=true
 node scripts/create-release.mjs
 ```
 
