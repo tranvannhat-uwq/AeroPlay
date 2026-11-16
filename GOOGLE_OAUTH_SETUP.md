@@ -74,7 +74,7 @@ Trước khi cài, xác nhận Android OAuth Client trong Google Cloud có packa
 7. Kiểm tra danh sách kênh đăng ký có các kênh đã đăng ký.
 8. Nhấn **Làm mới dữ liệu YouTube** lần nữa; xác nhận trạng thái thời gian cập nhật và dữ liệu được tải lại.
 9. Nhấn **Đăng xuất**; xác nhận hồ sơ và cache YouTube biến mất khỏi màn hình. Đăng nhập lại rồi làm mới để kiểm tra có thể cấp quyền lại.
-10. Mở một video từ danh sách; xác nhận AeroPlay chuyển sang YouTube/trình duyệt. Trong chế độ này video YouTube không phát bằng NewPipe/Media3; thử một nguồn media khác để đảm bảo trình phát chung vẫn hoạt động.
+10. Mở một video từ danh sách; xác nhận AeroPlay mở màn hình trình phát YouTube nhúng; chạm Play trong khung để phát. Thử khóa màn hình/chuyển ứng dụng: video phải dừng. Quay lại tải lại khung nhúng, thử Back để về AeroPlay. Video không cho nhúng có nút mở YouTube. Trong chế độ này video YouTube không phát bằng NewPipe/Media3; thử một nguồn media khác để đảm bảo trình phát chung vẫn hoạt động.
 
 Nếu gặp lỗi OAuth, log Debug chỉ ghi tên lớp exception và mã trạng thái Google nếu có; không ghi email, nội dung exception, token hay dữ liệu tài khoản. Mã lỗi `10` thường cần kiểm tra lại package/SHA-1 và loại Android OAuth Client; lỗi consent cần kiểm tra Web Client ID, scope, project đang bật YouTube Data API v3 và danh sách test users. Không gửi log chứa thông tin tài khoản công khai.
 

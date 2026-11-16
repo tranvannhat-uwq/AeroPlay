@@ -433,6 +433,7 @@ private fun String.toPrivacyLabel(): String = when (lowercase()) {
 }
 
 private fun openYouTubeUrl(context: Context, url: String) {
+    if (com.aeroplay.app.feature.player.YouTubePlayerActivity.open(context, url)) return
     try {
         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
     } catch (_: ActivityNotFoundException) {

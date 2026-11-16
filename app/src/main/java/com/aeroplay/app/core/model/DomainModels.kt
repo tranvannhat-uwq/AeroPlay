@@ -4,16 +4,20 @@ package com.aeroplay.app.core.model
  * Defines which content backend is active.
  * Kept strictly separated per Legal & Technical Rule II.10.
  */
-enum class ContentSourceType(val displayName: String, val isExperimental: Boolean) {
+enum class ContentSourceType(private val label: String, val isExperimental: Boolean) {
     DEMO_LOCAL(
-        displayName = "Nguồn Chuẩn Mở (Demo / Open Media)",
+        label = "Nguồn Chuẩn Mở (Demo / Open Media)",
         isExperimental = false
     ),
     EXPERIMENTAL_EXTRACTOR(
-        displayName = "Nguồn Thử Nghiệm (NewPipe Extractor)",
+        label = "Nguồn Thử Nghiệm (NewPipe Extractor)",
         isExperimental = true
     ),
     DEVICE_LOCAL("Video từ thiết bị", false);
+
+    val displayName: String
+        get() = if (this == EXPERIMENTAL_EXTRACTOR && com.aeroplay.app.BuildConfig.YOUTUBE_API_ONLY_MODE)
+            "YouTube (API chính thức)" else label
 
     companion object {
         val onlineSources = listOf(DEMO_LOCAL, EXPERIMENTAL_EXTRACTOR)

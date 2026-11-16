@@ -1,3 +1,12 @@
+AeroPlay 2.0.3
+
+- Video đã thích, video trong playlist tài khoản và video YouTube trong thư viện mở trình phát YouTube chính thức ngay trong AeroPlay.
+- Trang chủ và tìm kiếm dùng YouTube Data API với tài khoản đã cấp quyền; hiển thị nguồn YouTube, không tự thay thế bằng catalog Nguồn mở. Có thể chọn Nguồn mở riêng trong Cài đặt.
+- Trình phát nhúng giữ điều khiển của YouTube, dừng khi khóa màn hình/chuyển ứng dụng. Video bị chủ sở hữu chặn nhúng vẫn cần mở bằng YouTube.
+- Không dùng OAuth token để lấy luồng media. Khả năng phát nhúng trên điện thoại thật cần được xác nhận sau cài đặt.
+
+Cài đè để giữ dữ liệu. Android 8 trở lên.
+
 AeroPlay 2.0.2
 
 - Khi chế độ API-only chặn phát YouTube trong AeroPlay, thẻ lỗi có nút mở đúng video bằng ứng dụng YouTube hoặc trình duyệt.

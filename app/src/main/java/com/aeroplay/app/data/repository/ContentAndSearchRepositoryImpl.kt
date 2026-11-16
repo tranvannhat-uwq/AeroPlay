@@ -26,6 +26,7 @@ import javax.inject.Singleton
 
 @Singleton
 class ContentRepositoryImpl @Inject constructor(
+    private val youtubeBrowse: com.aeroplay.app.data.youtube.YouTubeBrowseRepository,
     private val settingsRepository: SettingsRepository,
     private val demoSource: DemoLocalMediaSource,
     private val extractorSource: ExperimentalExtractorSource
@@ -35,7 +36,7 @@ class ContentRepositoryImpl @Inject constructor(
         val activeSource = sourceOverride ?: settingsRepository.getSettingsSnapshot().activeSourceType
         SourceDiagnostics.event("home.repository", "source=$activeSource")
         if (activeSource == ContentSourceType.EXPERIMENTAL_EXTRACTOR && !YouTubePolicyFeatureFlags.allowNewPipeYouTube) {
-            return Result.failure(IllegalStateException("Chế độ API chính thức không tải nội dung YouTube qua NewPipe."))
+            return youtubeBrowse.home()
         }
         return when (activeSource) {
             ContentSourceType.DEMO_LOCAL -> Result.success(demoSource.getRecommendedVideos())
@@ -47,6 +48,7 @@ class ContentRepositoryImpl @Inject constructor(
 
 @Singleton
 class SearchRepositoryImpl @Inject constructor(
+    private val youtubeBrowse: com.aeroplay.app.data.youtube.YouTubeBrowseRepository,
     private val settingsRepository: SettingsRepository,
     private val demoSource: DemoLocalMediaSource,
     private val extractorSource: ExperimentalExtractorSource,
@@ -62,7 +64,10 @@ class SearchRepositoryImpl @Inject constructor(
         val activeSource = sourceOverride ?: settingsRepository.getSettingsSnapshot().activeSourceType
         SourceDiagnostics.event("search.repository", "source=$activeSource next=${pageToken != null}")
         if (activeSource == ContentSourceType.EXPERIMENTAL_EXTRACTOR && !YouTubePolicyFeatureFlags.allowNewPipeYouTube) {
-            return Result.failure(IllegalStateException("Chế độ API chính thức không tìm video YouTube bằng NewPipe."))
+            if (contentType != SearchContentType.ALL && contentType != SearchContentType.VIDEO) {
+                return Result.failure(IllegalArgumentException("Tìm kiếm YouTube hiện hỗ trợ tab Tất cả và Video. Playlist tài khoản ở Cài đặt → Tài khoản YouTube."))
+            }
+            return youtubeBrowse.search(query, pageToken as? String)
         }
         return when (activeSource) {
             ContentSourceType.DEMO_LOCAL -> Result.success(demoSource.search(query))

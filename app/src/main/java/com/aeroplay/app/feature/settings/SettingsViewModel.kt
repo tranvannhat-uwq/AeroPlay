@@ -48,12 +48,6 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setSourceType(sourceType: ContentSourceType) {
-        if (sourceType == ContentSourceType.EXPERIMENTAL_EXTRACTOR &&
-            !YouTubePolicyFeatureFlags.allowNewPipeYouTube
-        ) {
-            _statusToastMessage.value = "NewPipe bị khóa khi chế độ YouTube API chỉ đọc đang bật."
-            return
-        }
         viewModelScope.launch {
             settingsRepository.setActiveSourceType(sourceType, warningAccepted = true)
             _statusToastMessage.value = "Đã chuyển sang: ${sourceType.displayName}"

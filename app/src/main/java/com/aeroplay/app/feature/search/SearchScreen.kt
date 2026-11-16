@@ -326,7 +326,7 @@ fun SearchScreen(
                         if (uiState.source.isExperimental && (uiState.sortOrder != SearchSortOrder.RELEVANCE || uiState.timeRange != SearchTimeRange.ANY)) {
                             item {
                                 Text(
-                                    text = "Sắp xếp và thời gian áp dụng trên tập video NewPipe đã tải. Trang tải thêm được nối phía sau để giữ thứ tự bạn đã xem.",
+                                    text = "Sắp xếp và thời gian áp dụng trên tập video đã tải từ nguồn đang chọn. Trang tải thêm được nối phía sau để giữ thứ tự bạn đã xem.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

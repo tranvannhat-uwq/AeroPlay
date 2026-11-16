@@ -237,7 +237,9 @@ fun HomeScreen(
                             )
                             Spacer(modifier = Modifier.width(12.dp))
                             Text(
-                                text = if (settings.activeSourceType.isExperimental) {
+                                text = if (settings.activeSourceType.isExperimental && YouTubePolicyFeatureFlags.apiOnlyMode) {
+                                    "Tìm video YouTube..."
+                                } else if (settings.activeSourceType.isExperimental) {
                                     "Tìm kiếm video, kênh hoặc playlist (Extractor)..."
                                 } else {
                                     "Tìm kiếm video mở, phim Blender, luồng kiểm thử..."
@@ -364,7 +366,9 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (settings.activeSourceType.isExperimental) {
+                        text = if (settings.activeSourceType.isExperimental && YouTubePolicyFeatureFlags.apiOnlyMode) {
+                            "YouTube • Video phổ biến tại Việt Nam"
+                        } else if (settings.activeSourceType.isExperimental) {
                             "Khám phá trên YouTube (Extractor)"
                         } else {
                             "Video Chuẩn Mở Đề Xuất"
@@ -713,7 +717,7 @@ fun SourceSelectionDialog(
                 )
 
                 ContentSourceType.onlineSources
-                    .filter { source -> source != ContentSourceType.EXPERIMENTAL_EXTRACTOR || YouTubePolicyFeatureFlags.allowNewPipeYouTube }
+
                     .forEach { source ->
                     val isSelected = source == currentSource
                     Surface(
@@ -736,7 +740,9 @@ fun SourceSelectionDialog(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = if (source.isExperimental) {
+                                text = if (source.isExperimental && YouTubePolicyFeatureFlags.apiOnlyMode) {
+                                        "Dữ liệu YouTube thật và trình phát YouTube chính thức trong AeroPlay."
+                                    } else if (source.isExperimental) {
                                     "Chế độ thử nghiệm không chính thức (GPLv3). Có thể ngừng hoạt động khi YouTube thay đổi cấu trúc trang, chặn IP hoặc yêu cầu CAPTCHA. Chỉ dùng cho nghiên cứu cá nhân."
                                 } else {
                                     "Phát các luồng phim/nhạc Creative Commons hợp lệ độc lập với YouTube để kiểm thử Media3, PiP và phát nền ổn định 100%."

@@ -32,6 +32,38 @@ class YouTubeDataApiClient @Inject constructor(
 ) {
     private var apiBaseUrl = DEFAULT_API_BASE_URL
 
+    suspend fun popularVideos(token: String): List<com.aeroplay.app.core.model.VideoItem> {
+        val root = request(token, "videos", mapOf("part" to "snippet,contentDetails,statistics",
+            "chart" to "mostPopular", "regionCode" to "VN", "maxResults" to "30"))
+        return videoItems(root, search = false)
+    }
+
+    suspend fun searchVideos(token: String, query: String, pageToken: String?): com.aeroplay.app.core.model.SearchResultBundle {
+        val params = mutableMapOf("part" to "snippet", "type" to "video", "q" to query, "maxResults" to "25")
+        if (!pageToken.isNullOrBlank()) params["pageToken"] = pageToken
+        val root = request(token, "search", params)
+        return com.aeroplay.app.core.model.SearchResultBundle(query = query, videos = videoItems(root, search = true),
+            nextPageToken = root.optString("nextPageToken").takeIf { it.isNotBlank() },
+            sourceType = com.aeroplay.app.core.model.ContentSourceType.EXPERIMENTAL_EXTRACTOR)
+    }
+
+    private fun videoItems(root: JSONObject, search: Boolean): List<com.aeroplay.app.core.model.VideoItem> {
+        val items = root.optJSONArray("items") ?: return emptyList()
+        return (0 until items.length()).mapNotNull { index ->
+            val item = items.optJSONObject(index) ?: return@mapNotNull null
+            val id = if (search) item.optJSONObject("id")?.optString("videoId").orEmpty() else item.optString("id")
+            if (!id.matches(Regex("[A-Za-z0-9_-]{11}"))) return@mapNotNull null
+            val snippet = item.optJSONObject("snippet") ?: return@mapNotNull null
+            com.aeroplay.app.core.model.VideoItem(id = id, url = "https://www.youtube.com/watch?v=$id",
+                title = snippet.optString("title"), channelName = snippet.optString("channelTitle"),
+                thumbnailUrl = thumbnail(snippet.optJSONObject("thumbnails")),
+                durationSeconds = runCatching { java.time.Duration.parse(item.optJSONObject("contentDetails")?.optString("duration")).seconds }.getOrDefault(0L),
+                viewCount = item.optJSONObject("statistics")?.optLong("viewCount", -1L) ?: -1L,
+                sourceType = com.aeroplay.app.core.model.ContentSourceType.EXPERIMENTAL_EXTRACTOR,
+                publishedAtEpochMs = runCatching { java.time.Instant.parse(snippet.optString("publishedAt")).toEpochMilli() }.getOrNull())
+        }
+    }
+
     internal constructor(httpClient: OkHttpClient, apiBaseUrl: String) : this(httpClient) {
         this.apiBaseUrl = apiBaseUrl.trimEnd('/') + "/"
     }

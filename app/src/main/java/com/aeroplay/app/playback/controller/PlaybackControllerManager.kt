@@ -314,6 +314,8 @@ class PlaybackControllerManager @Inject constructor(
         autoRadioAfterEnd: Boolean = false
     ) {
         if (YouTubePolicyFeatureFlags.apiOnlyMode && YouTubePolicyFeatureFlags.isYouTubeVideo(video)) {
+            mediaController?.pause()
+            if (com.aeroplay.app.feature.player.YouTubePlayerActivity.open(context, video.url)) return
             _playbackState.update {
                 it.copy(
                     isLoadingMetadata = false,

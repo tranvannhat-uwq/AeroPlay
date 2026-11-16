@@ -163,7 +163,7 @@ fun SettingsScreen(
             SettingsGroupCard(title = "Nguồn Nội Dung (Data Source)") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     ContentSourceType.onlineSources
-                        .filter { source -> source != ContentSourceType.EXPERIMENTAL_EXTRACTOR || YouTubePolicyFeatureFlags.allowNewPipeYouTube }
+
                         .forEach { source ->
                         val selected = settings.activeSourceType == source
                         Surface(
@@ -185,7 +185,9 @@ fun SettingsScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = if (source.isExperimental) {
+                                    text = if (source.isExperimental && YouTubePolicyFeatureFlags.apiOnlyMode) {
+                                        "Dữ liệu YouTube thật và trình phát YouTube chính thức trong AeroPlay."
+                                    } else if (source.isExperimental) {
                                         "Dùng NewPipe Extractor (GPLv3) ở chế độ thử nghiệm cá nhân."
                                     } else {
                                         "Dùng luồng phim mở chuẩn Creative Commons để kiểm thử 100% tính năng."
@@ -198,7 +200,7 @@ fun SettingsScreen(
                     }
                     if (YouTubePolicyFeatureFlags.apiOnlyMode) {
                         Text(
-                            "Chế độ YouTube API chỉ đọc đang bật. NewPipe và phát YouTube bằng Media3 bị khóa; nội dung từ nguồn mở và thiết bị vẫn khả dụng.",
+                            "YouTube dùng dữ liệu API chỉ đọc và trình phát nhúng chính thức trong AeroPlay. Video YouTube dừng khi ra nền.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

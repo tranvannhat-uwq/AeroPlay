@@ -48,6 +48,8 @@
             </intent-filter>
         </activity>
 
+        <activity android:name=".feature.player.YouTubePlayerActivity" android:exported="false" />
+
         <!-- Background Audio & Unified MediaSession Service -->
         <service
             android:name=".playback.service.AeroPlayMediaService"

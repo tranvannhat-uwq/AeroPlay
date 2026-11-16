@@ -30,6 +30,27 @@ class YouTubeDataApiClientTest {
     }
 
     @Test
+    fun browseUsesOfficialApiAndPreservesSearchPagination() = runBlocking {
+        server.enqueue(MockResponse().setBody("""{"items":[{"id":"abcdefghijk","snippet":{"title":"Song","channelTitle":"Artist"},"contentDetails":{"duration":"PT3M12S"},"statistics":{"viewCount":"12345"}}]}"""))
+        val popular = client.popularVideos("sample-access-token")
+        assertEquals(192L, popular.single().durationSeconds)
+        assertEquals(12345L, popular.single().viewCount)
+        assertEquals("https://www.youtube.com/watch?v=abcdefghijk", popular.single().url)
+        val request = server.takeRequest()
+        assertEquals("mostPopular", request.requestUrl?.queryParameter("chart"))
+        assertEquals("VN", request.requestUrl?.queryParameter("regionCode"))
+        server.enqueue(MockResponse().setBody("""{"items":[{"id":{"videoId":"ZYXwvutsrqp"},"snippet":{"title":"Result","channelTitle":"Artist"}}],"nextPageToken":"page3"}"""))
+        val search = client.searchVideos("sample-access-token", "nhạc chill", "page2")
+        assertEquals("page3", search.nextPageToken)
+        assertEquals("ZYXwvutsrqp", search.videos.single().id)
+        val second = server.takeRequest()
+        assertEquals("page2", second.requestUrl?.queryParameter("pageToken"))
+        assertEquals("video", second.requestUrl?.queryParameter("type"))
+        assertEquals("nhạc chill", second.requestUrl?.queryParameter("q"))
+        assertEquals("GET", second.method)
+    }
+
+    @Test
     fun likedVideosAreReadOnlyAndPaginationIsFollowed() = runBlocking {
         server.enqueue(MockResponse().setBody("""
             {"items":[{"id":"video-a","snippet":{"title":"Track A","channelTitle":"Artist A","publishedAt":"2026-01-01T00:00:00Z","thumbnails":{"high":{"url":"https://img.example/a.jpg"}}}}],"nextPageToken":"next-page"}
