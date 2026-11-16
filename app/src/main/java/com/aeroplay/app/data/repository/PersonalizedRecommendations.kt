@@ -9,10 +9,12 @@ import com.aeroplay.app.core.database.RecommendationImpressionEntity
 import com.aeroplay.app.core.database.SearchHistoryEntity
 import com.aeroplay.app.core.database.PlaylistVideoEntity
 import com.aeroplay.app.core.model.ContentSourceType
+import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.core.network.SourceDiagnostics
 import com.aeroplay.app.data.source.DemoLocalMediaSource
 import com.aeroplay.app.data.source.ExperimentalExtractorSource
+import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -215,7 +217,14 @@ internal object RecommendationRanking {
     const val MARKED_WATCHED = "MARKED_WATCHED"
 }
 
-data class PersonalizedResult(val videos: List<VideoItem>, val message: String = "")
+data class PersonalizedResult(
+    val videos: List<VideoItem>,
+    val message: String = "",
+    val musicVideos: List<VideoItem> = emptyList(),
+    val popularMusicVideos: List<VideoItem> = emptyList(),
+    val musicPlaylists: List<PlaylistItem> = emptyList(),
+    val hasMusicStyleContext: Boolean = false
+)
 
 @Singleton
 class PersonalizedRecommendations @Inject constructor(
@@ -231,6 +240,8 @@ class PersonalizedRecommendations @Inject constructor(
     private data class CachedCandidates(
         val at: Long,
         val videos: List<VideoItem>,
+        val musicVideos: List<VideoItem>,
+        val playlists: List<PlaylistItem>,
         val relatedIds: Set<String>,
         val sourceSummary: String
     )
@@ -241,13 +252,23 @@ class PersonalizedRecommendations @Inject constructor(
         favorites: List<FavoriteEntity>,
         playlists: List<PlaylistVideoEntity>,
         searches: List<SearchHistoryEntity>,
-        source: ContentSourceType
+        source: ContentSourceType,
+        currentVideo: VideoItem? = null,
+        currentDescription: String = "",
+        currentIsMusic: Boolean = false
     ): PersonalizedResult = withContext(Dispatchers.Default) {
         val now = System.currentTimeMillis()
         val feedback = dao.getRecommendationFeedback()
         val blocked = dao.getBlockedRecommendationChannels()
         val impressions = dao.getRecommendationImpressions()
         val profile = RecommendationRanking.buildProfile(history, favorites, playlists, searches, feedback, blocked, impressions, now)
+        if (source == ContentSourceType.EXPERIMENTAL_EXTRACTOR && !YouTubePolicyFeatureFlags.allowNewPipeYouTube) {
+            val allowed = RecommendationRanking.rankForProfile(openMedia.getRecommendedVideos(), profile, now = now)
+            return@withContext PersonalizedResult(
+                videos = allowed,
+                message = if (allowed.isEmpty()) "Nguồn NewPipe đã bị tắt trong chế độ YouTube API chỉ đọc." else ""
+            )
+        }
         val sourceHistory = history.filter {
             it.sourceTypeName == source.name || (source.isExperimental && it.sourceTypeName == ContentSourceType.DEVICE_LOCAL.name)
         }
@@ -256,7 +277,31 @@ class PersonalizedRecommendations @Inject constructor(
         }
         val seeds = sourceHistory.map { RecommendationSeed(it.toVideoItem(), it.playCount, it.watchedAtEpochMs) } +
             sourceFavorites.map { RecommendationSeed(it.toVideoItem(), 1, it.addedAtEpochMs) }
-        val queries = (profile.preferredSearchTerms + profile.preferredTopics.keys.take(4))
+        val musicSeed = (listOfNotNull(currentVideo?.takeIf { currentIsMusic ||
+            MusicStyleAnalyzer.analyze(it.title, it.channelName, currentDescription).isLikelyMusic }) +
+            seeds.sortedByDescending { RecommendationRanking.seedWeight(it, now) }.map { it.video })
+            .firstOrNull { (currentIsMusic && it.id == currentVideo?.id) ||
+                MusicStyleAnalyzer.analyze(it.title, it.channelName,
+                    if (it.id == currentVideo?.id) currentDescription else "").isLikelyMusic }
+            ?: currentVideo?.takeIf { currentIsMusic }
+        val musicDescription = currentDescription.takeIf { musicSeed?.id == currentVideo?.id }.orEmpty()
+        val inferredStyle = musicSeed?.let { MusicStyleAnalyzer.analyze(it.title, it.channelName, musicDescription) }
+        val musicStyle = if (currentIsMusic && musicSeed?.id == currentVideo?.id && inferredStyle?.isLikelyMusic == false) {
+            inferredStyle.copy(isLikelyMusic = true, confidence = 0.4)
+        } else inferredStyle
+        val vietnameseMusicContext = musicSeed?.let {
+            MusicStyleAnalyzer.isVietnameseContext(it.title, it.channelName, musicDescription)
+        } ?: true
+        val musicQuery = when {
+            !source.isExperimental -> null
+            musicStyle == null -> "nhac viet pho bien"
+            musicStyle.genres.isNotEmpty() -> musicStyle.genres.first().let { genre ->
+                if (vietnameseMusicContext) "$genre nhac viet" else "$genre music songs"
+            }
+            vietnameseMusicContext -> "nhac tre viet moi"
+            else -> "popular songs music"
+        }
+        val queries = (listOfNotNull(musicQuery) + profile.preferredSearchTerms + profile.preferredTopics.keys.take(4))
             .map(String::trim).filter { it.length >= 2 }.distinct().take(2)
 
         if (!source.isExperimental) {
@@ -275,11 +320,14 @@ class PersonalizedRecommendations @Inject constructor(
             emptyList(), "Xem video hoặc tìm chủ đề bạn thích để AeroPlay bắt đầu cá nhân hóa."
         )
         val topSeeds = seeds.sortedByDescending { RecommendationRanking.seedWeight(it, now) }
+            .let { ordered -> (listOfNotNull(currentVideo?.let { RecommendationSeed(it, 1, now) }) + ordered) }
             .distinctBy { RecommendationRanking.stableKey(it.video) }.take(2)
         val key = (topSeeds.map { RecommendationRanking.stableKey(it.video) } + queries).joinToString("|")
         var pool = synchronized(cache) { cache[key]?.takeIf { now - it.at < CACHE_TTL_MS } }
         if (pool == null) {
             val candidates = mutableListOf<VideoItem>()
+            val musicCandidates = mutableListOf<VideoItem>()
+            val playlistCandidates = mutableListOf<PlaylistItem>()
             val relatedIds = mutableSetOf<String>()
             val sourceNames = mutableListOf<String>()
             val completed = withTimeoutOrNull(25_000L) {
@@ -296,16 +344,27 @@ class PersonalizedRecommendations @Inject constructor(
                     val result = extractor.search(query).getOrNull()
                     val found = result?.videos.orEmpty()
                     candidates += found
+                    if (query == musicQuery) {
+                        musicCandidates += found
+                        playlistCandidates += result?.playlists.orEmpty()
+                    }
                     if (found.isNotEmpty()) sourceNames += "search:${query.take(24)}"
                 }
                 true
             }
             if (completed == null) SourceDiagnostics.event("recommendation.candidates", "timeout=true seedCount=${topSeeds.size} queryCount=${queries.size}")
-            if (candidates.isEmpty()) return@withContext PersonalizedResult(
+            if (candidates.isEmpty() && playlistCandidates.isEmpty()) return@withContext PersonalizedResult(
                 emptyList(), if (completed == null) "Tải gợi ý quá lâu. Kéo xuống để thử lại."
                 else "Chưa lấy được video liên quan từ nguồn hiện tại."
             )
-            val loaded = CachedCandidates(now, candidates.distinctBy(RecommendationRanking::stableKey), relatedIds, sourceNames.distinct().joinToString(","))
+            val loaded = CachedCandidates(
+                now,
+                candidates.distinctBy(RecommendationRanking::stableKey),
+                musicCandidates.distinctBy(RecommendationRanking::stableKey),
+                playlistCandidates.distinctBy { it.url.ifBlank { it.id } },
+                relatedIds,
+                sourceNames.distinct().joinToString(",")
+            )
             pool = loaded
             synchronized(cache) {
                 cache[key] = loaded
@@ -316,7 +375,38 @@ class PersonalizedRecommendations @Inject constructor(
             SourceDiagnostics.event("recommendation.candidates", "cache=hit candidates=${pool.videos.size}")
         }
         val ranked = RecommendationRanking.rankForProfile(pool.videos, profile, pool.relatedIds, now)
-        PersonalizedResult(ranked, if (ranked.isEmpty()) "Chưa có gợi ý mới từ lịch sử và sở thích này." else "")
+        val musicPool = (pool.musicVideos + if (musicSeed != null) pool.videos else emptyList())
+            .distinctBy(RecommendationRanking::stableKey)
+            .filterNot { candidate ->
+                RecommendationRanking.stableKey(candidate) in profile.negativeInteractions ||
+                    RecommendationRanking.normalize(candidate.channelName) in profile.blockedChannels
+            }
+        val styleVideos = musicSeed?.let { seed -> MusicRecommendationRanker.rank(musicPool, seed,
+            currentDescription = musicDescription,
+            forceMusic = currentIsMusic && seed.id == currentVideo?.id) }
+            ?: MusicRecommendationRanker.diversify(musicPool)
+        val popularVideos = MusicRecommendationRanker.popular(
+            styleVideos, fromMusicQuery = true
+        )
+        val styleGenres = musicSeed?.let { MusicStyleAnalyzer.analyze(it.title, it.channelName, musicDescription).genres }.orEmpty()
+        val stylePlaylists = pool.playlists.asSequence()
+            .filter { it.streamCount != 0L && it.url.isNotBlank() }
+            .filter { playlist ->
+                val text = RecommendationRanking.normalize("${playlist.title} ${playlist.description}")
+                styleGenres.isEmpty() || styleGenres.any { it in text } ||
+                    text.contains("nhac") || text.contains("music") || text.contains("mix")
+            }
+            .distinctBy { it.url.ifBlank { it.id } }
+            .take(8)
+            .toList()
+        PersonalizedResult(
+            videos = ranked,
+            message = if (ranked.isEmpty()) "Chưa có gợi ý mới từ lịch sử và sở thích này." else "",
+            musicVideos = styleVideos.take(10),
+            popularMusicVideos = popularVideos,
+            musicPlaylists = stylePlaylists,
+            hasMusicStyleContext = musicSeed != null
+        )
     }
 
     suspend fun markNotInterested(video: VideoItem) {

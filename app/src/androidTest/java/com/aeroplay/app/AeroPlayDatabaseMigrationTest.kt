@@ -16,7 +16,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AeroPlayDatabaseMigrationTest {
     @Test
-    fun versionTwoMigrationPreservesHistoryAndAddsRecommendationSignals() = runBlocking {
+    fun versionTwoMigrationPreservesHistoryAndAddsYouTubeReadCache() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val name = "migration-2-to-3-test.db"
         context.deleteDatabase(name)
@@ -58,7 +58,7 @@ class AeroPlayDatabaseMigrationTest {
         old.close()
 
         val migrated = Room.databaseBuilder(context, AeroPlayDatabase::class.java, name)
-            .addMigrations(DatabaseModule.MIGRATION_2_3)
+            .addMigrations(DatabaseModule.MIGRATION_2_3, DatabaseModule.MIGRATION_3_4)
             .build()
         try {
             val preserved = migrated.aeroPlayDao().observeWatchHistory().first().single()
@@ -67,6 +67,13 @@ class AeroPlayDatabaseMigrationTest {
             assertEquals(7, preserved.playCount)
             assertEquals(0L, preserved.totalWatchedMs)
             assertEquals(0, preserved.completedPlayCount)
+            val youtubeTables = migrated.openHelper.readableDatabase.query(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'youtube_%'"
+            ).use { cursor -> buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) } }
+            assertEquals(
+                setOf("youtube_liked_videos", "youtube_remote_playlists", "youtube_remote_playlist_items", "youtube_subscriptions"),
+                youtubeTables
+            )
         } finally {
             migrated.close()
             context.deleteDatabase(name)

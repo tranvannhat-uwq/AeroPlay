@@ -5,6 +5,8 @@ import com.aeroplay.app.core.model.AudioTrack
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaybackPosition
 import com.aeroplay.app.core.model.PlaybackQueue
+import com.aeroplay.app.core.model.RemotePlaylistDetail
+import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.SearchResultBundle
 import com.aeroplay.app.core.model.SearchContentType
 import com.aeroplay.app.core.model.StreamVariant
@@ -49,6 +51,10 @@ interface VideoMetadataRepository {
         videoIdOrUrl: String,
         sourceHint: ContentSourceType? = null
     ): Result<VideoDetail>
+}
+
+interface RemotePlaylistRepository {
+    suspend fun getPlaylist(playlist: PlaylistItem): Result<RemotePlaylistDetail>
 }
 
 interface StreamResolver {
@@ -110,4 +116,5 @@ interface SettingsRepository {
     suspend fun setPauseOnHeadphoneDisconnect(enabled: Boolean)
     suspend fun setPipEnabled(enabled: Boolean)
     suspend fun setBackgroundPlaybackEnabled(enabled: Boolean)
+    suspend fun setAutoPlaySimilarMusic(enabled: Boolean)
 }

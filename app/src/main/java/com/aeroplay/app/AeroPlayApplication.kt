@@ -6,7 +6,12 @@ import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.aeroplay.app.core.network.NewPipeOkHttpDownloader
+import com.aeroplay.app.data.youtube.YouTubeAccountRepository
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import javax.inject.Inject
 
@@ -18,6 +23,9 @@ class AeroPlayApplication : Application(), ImageLoaderFactory {
 
     @Inject
     lateinit var newPipeDownloader: NewPipeOkHttpDownloader
+
+    @Inject
+    lateinit var youtubeAccountRepository: YouTubeAccountRepository
 
     override fun newImageLoader(): ImageLoader {
         // Optimized thumbnail cache for 4GB RAM devices (Section VII)
@@ -36,5 +44,12 @@ class AeroPlayApplication : Application(), ImageLoaderFactory {
             }
             .crossfade(true)
             .build()
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+            runCatching { youtubeAccountRepository.pruneExpiredApiData() }
+        }
     }
 }

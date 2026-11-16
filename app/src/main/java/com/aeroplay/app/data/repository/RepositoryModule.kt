@@ -28,6 +28,10 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindRemotePlaylistRepository(impl: RemotePlaylistRepositoryImpl): RemotePlaylistRepository
+
+    @Binds
+    @Singleton
     abstract fun bindStreamResolver(impl: StreamResolverImpl): StreamResolver
 
     @Binds

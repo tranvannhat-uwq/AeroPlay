@@ -1,5 +1,11 @@
 package com.aeroplay.app.feature.settings
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DarkMode
@@ -30,6 +37,7 @@ import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -39,6 +47,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,14 +56,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import com.aeroplay.app.core.designsystem.GlassSurface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.aeroplay.app.BuildConfig
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.ThemeMode
+import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import com.aeroplay.app.updates.UpdateSettingsCard
 
 @Composable
@@ -64,9 +76,30 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val toastMessage by viewModel.statusToastMessage.collectAsStateWithLifecycle()
+    val accountViewModel: YouTubeAccountViewModel = hiltViewModel()
+    val youtubeAccount by accountViewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var showOpenSourceLicenses by remember { mutableStateOf(false) }
     var showLimitationsModal by remember { mutableStateOf(false) }
+    var showYouTubeAccount by remember { mutableStateOf(false) }
+    val authorizationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            accountViewModel.onAuthorizationResult(context, result.data)
+        } else {
+            accountViewModel.onAuthorizationCancelled()
+        }
+    }
+
+    LaunchedEffect(youtubeAccount.pendingAuthorization) {
+        val pending = youtubeAccount.pendingAuthorization ?: return@LaunchedEffect
+        accountViewModel.authorizationLaunchHandled()
+        runCatching {
+            authorizationLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+        }.onFailure { accountViewModel.onAuthorizationCancelled() }
+    }
 
     if (toastMessage != null) {
         AlertDialog(
@@ -87,6 +120,21 @@ fun SettingsScreen(
 
     if (showLimitationsModal) {
         ExperimentalSourceLimitationsDialog(onDismiss = { showLimitationsModal = false })
+    }
+
+    if (showYouTubeAccount) {
+        YouTubeAccountDialog(
+            state = youtubeAccount,
+            onDismiss = { showYouTubeAccount = false },
+            onSignIn = { context.findActivity()?.let(accountViewModel::signIn) },
+            onRefresh = { accountViewModel.refresh(context) },
+            onSignOut = { accountViewModel.signOut(context) },
+            onAcceptPolicy = { context.findActivity()?.let(accountViewModel::acceptPrivacyPolicyAndSignIn) },
+            onSelectChannel = { accountViewModel.selectChannel(context, it) },
+            onOpenPlaylist = { playlistContext, playlistId, force ->
+                accountViewModel.openPlaylist(playlistContext, playlistId, force)
+            }
+        )
     }
 
     LazyColumn(
@@ -114,7 +162,9 @@ fun SettingsScreen(
         item {
             SettingsGroupCard(title = "Nguồn Nội Dung (Data Source)") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ContentSourceType.onlineSources.forEach { source ->
+                    ContentSourceType.onlineSources
+                        .filter { source -> source != ContentSourceType.EXPERIMENTAL_EXTRACTOR || YouTubePolicyFeatureFlags.allowNewPipeYouTube }
+                        .forEach { source ->
                         val selected = settings.activeSourceType == source
                         Surface(
                             modifier = Modifier
@@ -145,6 +195,13 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
+                    if (YouTubePolicyFeatureFlags.apiOnlyMode) {
+                        Text(
+                            "Chế độ YouTube API chỉ đọc đang bật. NewPipe và phát YouTube bằng Media3 bị khóa; nội dung từ nguồn mở và thiết bị vẫn khả dụng.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -240,6 +297,14 @@ fun SettingsScreen(
                     )
 
                     SettingsToggleRow(
+                        icon = Icons.Filled.AutoAwesome,
+                        title = "Tự phát tiếp nhạc cùng phong cách",
+                        subtitle = "Tự chuyển sang bài phù hợp khi bài hiện tại kết thúc",
+                        checked = settings.autoPlaySimilarMusic,
+                        onCheckedChange = { viewModel.setAutoPlaySimilarMusic(it) }
+                    )
+
+                    SettingsToggleRow(
                         icon = Icons.Filled.PictureInPictureAlt,
                         title = "Tự động bật Picture-in-Picture (PiP)",
                         subtitle = "Thu nhỏ video về góc màn hình khi nhấn Home lúc đang phát",
@@ -294,6 +359,19 @@ fun SettingsScreen(
             }
         }
 
+        item {
+            SettingsGroupCard(title = "Tài khoản YouTube") {
+                SettingsActionRow(
+                    icon = Icons.Filled.AccountCircle,
+                    title = if (youtubeAccount.profile == null) "Đăng nhập Google" else "Tài khoản YouTube",
+                    subtitle = youtubeAccount.profile?.let {
+                        listOf(it.displayName, it.channelTitle).filter(String::isNotBlank).distinct().joinToString(" • ")
+                    } ?: "Xem video đã thích, danh sách phát và kênh đã đăng ký",
+                    onClick = { showYouTubeAccount = true }
+                )
+            }
+        }
+
         item { UpdateSettingsCard(viewModel.appUpdates) }
 
         // 6. Legal, Limitations & Version
@@ -328,6 +406,12 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(96.dp + LocalFloatingPlayerInset.current))
         }
     }
+}
+
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable

@@ -7,6 +7,8 @@ import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaybackPosition
 import com.aeroplay.app.core.model.SourceError
 import com.aeroplay.app.core.model.UserPlaylist
+import com.aeroplay.app.core.model.PlaylistItem
+import com.aeroplay.app.core.model.RemotePlaylistUiState
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.core.database.HistoryEntity
 import com.aeroplay.app.core.network.SourceDiagnostics
@@ -16,6 +18,8 @@ import com.aeroplay.app.data.repository.PlaylistRepository
 import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.data.repository.PersonalizedRecommendations
 import com.aeroplay.app.data.repository.PersonalizedResult
+import com.aeroplay.app.data.repository.RemotePlaylistRepository
+import com.aeroplay.app.data.repository.MusicStyleAnalyzer
 import com.aeroplay.app.data.source.SourceErrorException
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,7 +55,11 @@ data class HomeUiState(
 data class PersonalizedUiState(
     val loading: Boolean = true,
     val videos: List<VideoItem> = emptyList(),
-    val message: String = ""
+    val message: String = "",
+    val musicVideos: List<VideoItem> = emptyList(),
+    val popularMusicVideos: List<VideoItem> = emptyList(),
+    val musicPlaylists: List<PlaylistItem> = emptyList(),
+    val hasMusicStyleContext: Boolean = false
 )
 
 enum class RecommendationAction { NOT_INTERESTED, BLOCK_CHANNEL, MARK_WATCHED, WATCH_LATER }
@@ -64,6 +72,7 @@ class HomeViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val settingsRepository: SettingsRepository,
     private val personalizedRecommendations: PersonalizedRecommendations,
+    private val remotePlaylistRepository: RemotePlaylistRepository,
     private val playbackController: PlaybackControllerManager
 ) : ViewModel() {
 
@@ -76,6 +85,8 @@ class HomeViewModel @Inject constructor(
     private val recommendationRefresh = MutableStateFlow(0)
     private val personalized = MutableStateFlow(PersonalizedUiState())
     val personalizedState = personalized.asStateFlow()
+    private val remotePlaylist = MutableStateFlow<RemotePlaylistUiState?>(null)
+    val remotePlaylistState = remotePlaylist.asStateFlow()
 
     val favorites: StateFlow<List<VideoItem>> = historyRepository.observeFavorites()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -126,19 +137,45 @@ class HomeViewModel @Inject constructor(
                 settingsRepository.settingsFlow.map { it.activeSourceType }.distinctUntilChanged(),
                 recommendationRefresh
             ) { source, _ -> source }
-            combine(profileInputs, activeSource) { profile, source -> profile.copy(source = source) }
+            combine(
+                profileInputs,
+                activeSource,
+                playbackController.playbackState.map { state ->
+                    Triple(
+                        state.currentVideo,
+                        state.currentDetail?.description.orEmpty(),
+                        state.queue.radioMode || state.queue.autoRadioAfterEnd
+                    )
+                }.distinctUntilChangedBy { (video, description, isMusic) ->
+                    "${video?.sourceType}:${video?.id}:${video?.title}:$description:$isMusic"
+                }
+            ) { profile, source, playbackContext -> profile.copy(
+                source = source,
+                currentVideo = playbackContext.first,
+                currentDescription = playbackContext.second,
+                currentIsMusic = playbackContext.third
+            ) }
                 .collectLatest { input ->
                     personalized.value = PersonalizedUiState()
                     val result = try {
                         personalizedRecommendations.recommendations(
-                            input.history, input.favorites, input.playlists, input.searches, input.source
+                            input.history, input.favorites, input.playlists, input.searches,
+                            input.source, input.currentVideo, input.currentDescription, input.currentIsMusic
                         )
                     } catch (cancelled: CancellationException) { throw cancelled }
                     catch (error: Exception) {
                         SourceDiagnostics.failure("recommendations", error)
                         PersonalizedResult(emptyList(), "Chưa tải được gợi ý. Kéo xuống để thử lại.")
                     }
-                    personalized.value = PersonalizedUiState(false, result.videos, result.message)
+                    personalized.value = PersonalizedUiState(
+                        loading = false,
+                        videos = result.videos,
+                        message = result.message,
+                        musicVideos = result.musicVideos,
+                        popularMusicVideos = result.popularMusicVideos,
+                        musicPlaylists = result.musicPlaylists,
+                        hasMusicStyleContext = result.hasMusicStyleContext
+                    )
                 }
         }
     }
@@ -204,13 +241,15 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun playVideo(video: VideoItem, queue: List<VideoItem>, queueTitle: String) {
+    fun playVideo(video: VideoItem, queue: List<VideoItem>, queueTitle: String, radioMode: Boolean = false) {
         viewModelScope.launch { personalizedRecommendations.recordClick(video) }
+        val startsMusicRadio = radioMode || MusicStyleAnalyzer.analyze(video.title, video.channelName).isLikelyMusic
         playbackController.loadAndPlayVideo(
             video = video,
-            queueItems = queue,
-            queueTitle = queueTitle,
-            openFullPlayer = true
+            queueItems = if (startsMusicRadio && !radioMode) listOf(video) else queue,
+            queueTitle = if (startsMusicRadio && !radioMode) "Phát tiếp cùng phong cách" else queueTitle,
+            openFullPlayer = true,
+            radioMode = startsMusicRadio
         )
     }
 
@@ -251,6 +290,49 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun openRemotePlaylist(playlist: PlaylistItem) {
+        remotePlaylist.value = RemotePlaylistUiState(playlist)
+        viewModelScope.launch {
+            val result = remotePlaylistRepository.getPlaylist(playlist)
+            result.fold(
+                onSuccess = { detail ->
+                    if (remotePlaylist.value?.playlist?.id == playlist.id) {
+                        remotePlaylist.value = RemotePlaylistUiState(
+                            playlist = detail.playlist,
+                            isLoading = false,
+                            videos = detail.videos,
+                            hasMore = detail.hasMore
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    if (remotePlaylist.value?.playlist?.id == playlist.id) {
+                        remotePlaylist.value = RemotePlaylistUiState(
+                            playlist = playlist,
+                            isLoading = false,
+                            error = error.message ?: "Không tải được playlist."
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun closeRemotePlaylist() {
+        remotePlaylist.value = null
+    }
+
+    fun playRemotePlaylistVideo(video: VideoItem, queue: List<VideoItem>, title: String) {
+        playbackController.loadAndPlayVideo(
+            video = video,
+            queueItems = queue,
+            queueTitle = title,
+            openFullPlayer = true,
+            autoRadioAfterEnd = true
+        )
+        remotePlaylist.value = null
+    }
+
     fun switchSource(sourceType: ContentSourceType) {
         viewModelScope.launch {
             settingsRepository.setActiveSourceType(sourceType, warningAccepted = true)
@@ -263,5 +345,8 @@ private data class RecommendationInputs(
     val favorites: List<com.aeroplay.app.core.database.FavoriteEntity>,
     val playlists: List<com.aeroplay.app.core.database.PlaylistVideoEntity>,
     val searches: List<com.aeroplay.app.core.database.SearchHistoryEntity>,
-    val source: ContentSourceType = ContentSourceType.DEMO_LOCAL
+    val source: ContentSourceType = ContentSourceType.DEMO_LOCAL,
+    val currentVideo: VideoItem? = null,
+    val currentDescription: String = "",
+    val currentIsMusic: Boolean = false
 )

@@ -103,7 +103,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.aeroplay.app.feature.search.RelatedVideoRanker
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -830,13 +829,12 @@ fun FullPlayerOverlay(
                         }
                     }
 
-                    // Related Videos or Queue Section
-                    val nextList = RelatedVideoRanker.rank(detail?.relatedVideos.orEmpty(), currentVideo)
-                        .ifEmpty { state.queue.items }
+                    // Show the same ordered queue that powers Next and automatic playback.
+                    val nextList = state.queue.items.drop(state.queue.currentIndex + 1)
                     if (nextList.isNotEmpty()) {
                         item {
                             Text(
-                                text = "Video tiếp theo & Liên quan",
+                                text = "Tiếp theo",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onBackground
                             )
@@ -844,15 +842,16 @@ fun FullPlayerOverlay(
 
                         items(
                             items = nextList.filter { it.id != currentVideo.id },
-                            key = { "rel_${it.id}" }
+                            key = { "rel_${it.sourceType.name}_${it.id}" }
                         ) { item ->
                             CompactVideoRowCard(
                                 video = item,
                                 onClick = {
                                     viewModel.playRelatedOrQueueVideo(
                                         video = item,
-                                        queue = nextList,
-                                        title = "Video liên quan"
+                                        queue = state.queue.items,
+                                        title = state.queue.queueTitle,
+                                        radioMode = state.queue.radioMode
                                     )
                                 }
                             )

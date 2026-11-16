@@ -5,6 +5,7 @@ import com.aeroplay.app.core.model.ChannelItem
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.DeliveryType
 import com.aeroplay.app.core.model.PlaylistItem
+import com.aeroplay.app.core.model.RemotePlaylistDetail
 import com.aeroplay.app.core.model.SearchResultBundle
 import com.aeroplay.app.core.model.SourceError
 import com.aeroplay.app.core.model.StreamVariant
@@ -40,6 +41,7 @@ import org.schabi.newpipe.extractor.exceptions.ReCaptchaException
 import org.schabi.newpipe.extractor.kiosk.KioskInfo
 import org.schabi.newpipe.extractor.linkhandler.SearchQueryHandler
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
+import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.search.SearchInfo
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.DeliveryMethod
@@ -145,6 +147,52 @@ class ExperimentalExtractorSource @Inject constructor(
             )
         }
     }
+
+    suspend fun getPlaylist(playlist: PlaylistItem): Result<RemotePlaylistDetail> =
+        executeWithRetry("playlist") {
+            val url = playlist.url.ifBlank { playlist.id }
+            val service = NewPipe.getServiceByUrl(url)
+            val info = PlaylistInfo.getInfo(service, url)
+            val videos = info.relatedItems.map { it.toVideoItem() }.toMutableList()
+            var nextPage = info.nextPage
+            var pagesLoaded = 1
+            var pageFailed = false
+            while (nextPage != null && videos.size < MAX_REMOTE_PLAYLIST_ITEMS && pagesLoaded < MAX_REMOTE_PLAYLIST_PAGES) {
+                if (Thread.currentThread().isInterrupted) {
+                    throw CancellationException("Playlist loading was cancelled.")
+                }
+                val page = try {
+                    PlaylistInfo.getMoreItems(service, url, nextPage)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    if (videos.isEmpty()) throw error
+                    pageFailed = true
+                    SourceDiagnostics.failure("playlist.page", error)
+                    break
+                }
+                videos += page.items.map { it.toVideoItem() }
+                nextPage = page.nextPage
+                pagesLoaded++
+            }
+            if (videos.isEmpty() && info.errors.isNotEmpty()) {
+                throw ExtractionException("Playlist items could not be extracted", info.errors.first())
+            }
+            val mappedPlaylist = playlist.copy(
+                id = info.url.ifBlank { playlist.id },
+                url = info.url.ifBlank { url },
+                title = info.name.ifBlank { playlist.title },
+                uploaderName = info.uploaderName.ifBlank { playlist.uploaderName },
+                thumbnailUrl = info.thumbnails.bestImageUrl().ifBlank { playlist.thumbnailUrl },
+                streamCount = info.streamCount.takeIf { it > 0L } ?: playlist.streamCount,
+                description = info.description?.content.orEmpty().ifBlank { playlist.description }
+            )
+            RemotePlaylistDetail(
+                playlist = mappedPlaylist,
+                videos = videos.distinctBy { "${it.sourceType.name}:${it.id}" }.take(MAX_REMOTE_PLAYLIST_ITEMS),
+                hasMore = nextPage != null || pageFailed
+            )
+        }
 
     suspend fun extractVideoDetail(urlOrId: String): Result<VideoDetail> = executeWithRetry("metadata") {
         val resolvedUrl = normalizeVideoUrl(urlOrId)
@@ -291,7 +339,8 @@ class ExperimentalExtractorSource @Inject constructor(
                         uploaderName = item.uploaderName.orEmpty(),
                         thumbnailUrl = item.thumbnails.bestImageUrl(),
                         streamCount = item.streamCount,
-                        sourceType = ContentSourceType.EXPERIMENTAL_EXTRACTOR
+                        sourceType = ContentSourceType.EXPERIMENTAL_EXTRACTOR,
+                        description = item.description?.content.orEmpty()
                     )
                 )
             }
@@ -394,6 +443,11 @@ class ExperimentalExtractorSource @Inject constructor(
     private fun parseResolutionHeight(resolution: String): Int {
         val digits = resolution.takeWhile { it.isDigit() }
         return digits.toIntOrNull() ?: 360
+    }
+
+    private companion object {
+        const val MAX_REMOTE_PLAYLIST_ITEMS = 80
+        const val MAX_REMOTE_PLAYLIST_PAGES = 4
     }
 
     private fun List<Image>?.bestImageUrl(): String {

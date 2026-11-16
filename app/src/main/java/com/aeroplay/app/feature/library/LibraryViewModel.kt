@@ -8,6 +8,7 @@ import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.data.repository.HistoryRepository
 import com.aeroplay.app.data.repository.PlaylistRepository
+import com.aeroplay.app.data.repository.MusicStyleAnalyzer
 import com.aeroplay.app.data.repository.DeviceMediaRepository
 import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
@@ -157,11 +158,17 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun playVideo(video: VideoItem, list: List<VideoItem>, title: String) {
+        val sample = list.take(8)
+        val musicCount = sample.count {
+            MusicStyleAnalyzer.analyze(it.title, it.channelName).isLikelyMusic
+        }
+        val continueWithMusic = sample.size >= 2 && musicCount * 2 >= sample.size
         playbackController.loadAndPlayVideo(
             video = video,
             queueItems = list,
             queueTitle = title,
-            openFullPlayer = true
+            openFullPlayer = true,
+            autoRadioAfterEnd = continueWithMusic
         )
     }
 }

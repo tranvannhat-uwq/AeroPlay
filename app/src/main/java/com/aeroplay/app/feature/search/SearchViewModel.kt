@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.aeroplay.app.core.model.ChannelItem
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaylistItem
+import com.aeroplay.app.core.model.RemotePlaylistUiState
 import com.aeroplay.app.core.model.SearchResultBundle
 import com.aeroplay.app.core.model.SearchContentType
 import com.aeroplay.app.core.model.SourceError
@@ -13,7 +14,9 @@ import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.core.network.SourceDiagnostics
 import com.aeroplay.app.data.repository.HistoryRepository
+import com.aeroplay.app.data.repository.MusicStyleAnalyzer
 import com.aeroplay.app.data.repository.PlaylistRepository
+import com.aeroplay.app.data.repository.RemotePlaylistRepository
 import com.aeroplay.app.data.repository.SearchRepository
 import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.data.source.SourceErrorException
@@ -68,6 +71,7 @@ class SearchViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val historyRepository: HistoryRepository,
     private val playlistRepository: PlaylistRepository,
+    private val remotePlaylistRepository: RemotePlaylistRepository,
     private val playbackController: PlaybackControllerManager,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
@@ -83,6 +87,8 @@ class SearchViewModel @Inject constructor(
         )
     )
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+    private val remotePlaylist = MutableStateFlow<RemotePlaylistUiState?>(null)
+    val remotePlaylistState: StateFlow<RemotePlaylistUiState?> = remotePlaylist.asStateFlow()
 
     val searchHistory: StateFlow<List<String>> = searchRepository.observeSearchHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -325,17 +331,70 @@ class SearchViewModel @Inject constructor(
     }
 
     fun playVideo(video: VideoItem) {
+        val searchState = _uiState.value
+        val musicResults = searchState.videos.count {
+            MusicStyleAnalyzer.analyze(it.title, it.channelName).isLikelyMusic
+        }
+        val resultsLookLikeMusic = searchState.videos.isNotEmpty() && musicResults >= 2 &&
+            musicResults * 2 >= searchState.videos.size
+        val radioMode = MusicStyleAnalyzer.analyze(video.title, video.channelName).isLikelyMusic ||
+            SearchQueryAnalyzer.analyze(searchState.query).intent == SearchIntent.MUSIC || resultsLookLikeMusic
         viewModelScope.launch {
-            if (_uiState.value.query.isNotBlank()) {
-                searchRepository.saveSearchQuery(_uiState.value.query.trim())
+            if (searchState.query.isNotBlank()) {
+                searchRepository.saveSearchQuery(searchState.query.trim())
             }
         }
         playbackController.loadAndPlayVideo(
             video = video,
-            queueItems = _uiState.value.videos.ifEmpty { listOf(video) },
-            queueTitle = "Kết quả tìm kiếm: ${_uiState.value.query}",
-            openFullPlayer = true
+            queueItems = if (radioMode) listOf(video) else searchState.videos.ifEmpty { listOf(video) },
+            queueTitle = if (radioMode) "Phát tiếp cùng phong cách" else "Kết quả tìm kiếm: ${searchState.query}",
+            openFullPlayer = true,
+            radioMode = radioMode
         )
+    }
+
+    fun openRemotePlaylist(playlist: PlaylistItem) {
+        remotePlaylist.value = RemotePlaylistUiState(playlist)
+        viewModelScope.launch {
+            remotePlaylistRepository.getPlaylist(playlist).fold(
+                onSuccess = { detail ->
+                    if (remotePlaylist.value?.playlist?.id == playlist.id) {
+                        remotePlaylist.value = RemotePlaylistUiState(
+                            playlist = detail.playlist,
+                            isLoading = false,
+                            videos = detail.videos,
+                            hasMore = detail.hasMore
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    if (remotePlaylist.value?.playlist?.id == playlist.id) {
+                        remotePlaylist.value = RemotePlaylistUiState(
+                            playlist = playlist,
+                            isLoading = false,
+                            error = error.message ?: "Không tải được playlist."
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun closeRemotePlaylist() {
+        remotePlaylist.value = null
+    }
+
+    fun playRemotePlaylistVideo(video: VideoItem, queue: List<VideoItem>, title: String) {
+        val playlist = remotePlaylist.value?.playlist
+        val musicPlaylist = playlist?.let {
+            MusicStyleAnalyzer.analyze(it.title, it.uploaderName, it.description).isLikelyMusic
+        } == true || SearchQueryAnalyzer.analyze(_uiState.value.query).intent == SearchIntent.MUSIC
+        playbackController.loadAndPlayVideo(
+            video, queue, title,
+            openFullPlayer = true,
+            autoRadioAfterEnd = musicPlaylist
+        )
+        remotePlaylist.value = null
     }
 
     fun toggleFavorite(video: VideoItem) {

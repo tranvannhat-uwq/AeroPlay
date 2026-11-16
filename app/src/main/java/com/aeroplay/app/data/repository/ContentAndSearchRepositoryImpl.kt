@@ -4,6 +4,8 @@ import com.aeroplay.app.core.database.AeroPlayDao
 import com.aeroplay.app.core.database.SearchHistoryEntity
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaybackQueue
+import com.aeroplay.app.core.model.PlaylistItem
+import com.aeroplay.app.core.model.RemotePlaylistDetail
 import com.aeroplay.app.core.model.SearchResultBundle
 import com.aeroplay.app.core.model.SearchContentType
 import com.aeroplay.app.core.model.SourceError
@@ -13,6 +15,7 @@ import com.aeroplay.app.core.network.SourceDiagnostics
 import com.aeroplay.app.data.source.DemoLocalMediaSource
 import com.aeroplay.app.data.source.ExperimentalExtractorSource
 import com.aeroplay.app.data.source.SourceErrorException
+import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +34,9 @@ class ContentRepositoryImpl @Inject constructor(
     override suspend fun getHomeFeed(sourceOverride: ContentSourceType?): Result<List<VideoItem>> {
         val activeSource = sourceOverride ?: settingsRepository.getSettingsSnapshot().activeSourceType
         SourceDiagnostics.event("home.repository", "source=$activeSource")
+        if (activeSource == ContentSourceType.EXPERIMENTAL_EXTRACTOR && !YouTubePolicyFeatureFlags.allowNewPipeYouTube) {
+            return Result.failure(IllegalStateException("Chế độ API chính thức không tải nội dung YouTube qua NewPipe."))
+        }
         return when (activeSource) {
             ContentSourceType.DEMO_LOCAL -> Result.success(demoSource.getRecommendedVideos())
             ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.fetchTrendingOrFeatured()
@@ -55,6 +61,9 @@ class SearchRepositoryImpl @Inject constructor(
     ): Result<SearchResultBundle> {
         val activeSource = sourceOverride ?: settingsRepository.getSettingsSnapshot().activeSourceType
         SourceDiagnostics.event("search.repository", "source=$activeSource next=${pageToken != null}")
+        if (activeSource == ContentSourceType.EXPERIMENTAL_EXTRACTOR && !YouTubePolicyFeatureFlags.allowNewPipeYouTube) {
+            return Result.failure(IllegalStateException("Chế độ API chính thức không tìm video YouTube bằng NewPipe."))
+        }
         return when (activeSource) {
             ContentSourceType.DEMO_LOCAL -> Result.success(demoSource.search(query))
             ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.search(query, pageToken, contentType)
@@ -105,6 +114,11 @@ class VideoMetadataRepositoryImpl @Inject constructor(
 
         val isYoutubeUrl = videoIdOrUrl.contains("youtube.com") ||
             videoIdOrUrl.contains("youtu.be")
+        if (!YouTubePolicyFeatureFlags.allowNewPipeYouTube &&
+            (isYoutubeUrl || sourceHint == ContentSourceType.EXPERIMENTAL_EXTRACTOR)
+        ) {
+            return Result.failure(IllegalStateException("Chế độ YouTube API chỉ đọc không chuyển video YouTube vào Media3. Hãy mở bằng ứng dụng YouTube."))
+        }
         val effectiveSource = when {
             isYoutubeUrl -> ContentSourceType.EXPERIMENTAL_EXTRACTOR
             sourceHint != null -> sourceHint
@@ -118,6 +132,26 @@ class VideoMetadataRepositoryImpl @Inject constructor(
             ContentSourceType.EXPERIMENTAL_EXTRACTOR -> extractorSource.extractVideoDetail(videoIdOrUrl)
             ContentSourceType.DEVICE_LOCAL -> deviceMedia.detail(videoIdOrUrl)
         }
+    }
+}
+
+@Singleton
+class RemotePlaylistRepositoryImpl @Inject constructor(
+    private val extractorSource: ExperimentalExtractorSource,
+    private val demoSource: DemoLocalMediaSource
+) : RemotePlaylistRepository {
+    override suspend fun getPlaylist(playlist: PlaylistItem): Result<RemotePlaylistDetail> {
+        if (playlist.sourceType == ContentSourceType.DEMO_LOCAL && playlist.id == "playlist_open_movies") {
+            val videos = demoSource.getRecommendedVideos().take(playlist.streamCount.coerceAtLeast(0L).toInt())
+            return Result.success(RemotePlaylistDetail(playlist, videos))
+        }
+        if (!YouTubePolicyFeatureFlags.allowNewPipeYouTube && playlist.sourceType.isExperimental) {
+            return Result.failure(IllegalStateException("Chế độ API chính thức không đọc playlist bằng NewPipe."))
+        }
+        if (!playlist.sourceType.isExperimental) {
+            return Result.failure(IllegalArgumentException("Nguồn playlist này chưa hỗ trợ phát nội dung."))
+        }
+        return extractorSource.getPlaylist(playlist)
     }
 }
 

@@ -42,6 +42,36 @@ object DatabaseModule {
         }
     }
 
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS youtube_liked_videos (
+                accountId TEXT NOT NULL, videoId TEXT NOT NULL, title TEXT NOT NULL,
+                channelTitle TEXT NOT NULL, thumbnailUrl TEXT NOT NULL, publishedAt TEXT NOT NULL,
+                cachedAtEpochMs INTEGER NOT NULL, PRIMARY KEY(accountId, videoId))""")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_youtube_liked_videos_accountId ON youtube_liked_videos(accountId)")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS youtube_remote_playlists (
+                accountId TEXT NOT NULL, playlistId TEXT NOT NULL, title TEXT NOT NULL,
+                description TEXT NOT NULL, thumbnailUrl TEXT NOT NULL, itemCount INTEGER NOT NULL,
+                privacyStatus TEXT NOT NULL, etag TEXT NOT NULL, cachedAtEpochMs INTEGER NOT NULL,
+                PRIMARY KEY(accountId, playlistId))""")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_youtube_remote_playlists_accountId ON youtube_remote_playlists(accountId)")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS youtube_remote_playlist_items (
+                accountId TEXT NOT NULL, playlistId TEXT NOT NULL, playlistItemId TEXT NOT NULL,
+                videoId TEXT NOT NULL, title TEXT NOT NULL, channelTitle TEXT NOT NULL,
+                thumbnailUrl TEXT NOT NULL, position INTEGER NOT NULL, cachedAtEpochMs INTEGER NOT NULL,
+                PRIMARY KEY(accountId, playlistId, playlistItemId))""")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_youtube_remote_playlist_items_accountId ON youtube_remote_playlist_items(accountId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_youtube_remote_playlist_items_playlistId ON youtube_remote_playlist_items(playlistId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_youtube_remote_playlist_items_videoId ON youtube_remote_playlist_items(videoId)")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS youtube_subscriptions (
+                accountId TEXT NOT NULL, subscriptionId TEXT NOT NULL, channelId TEXT NOT NULL,
+                channelTitle TEXT NOT NULL, thumbnailUrl TEXT NOT NULL, description TEXT NOT NULL,
+                cachedAtEpochMs INTEGER NOT NULL, PRIMARY KEY(accountId, subscriptionId))""")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_youtube_subscriptions_accountId ON youtube_subscriptions(accountId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_youtube_subscriptions_channelId ON youtube_subscriptions(channelId)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AeroPlayDatabase {
@@ -49,7 +79,7 @@ object DatabaseModule {
             context,
             AeroPlayDatabase::class.java,
             "aeroplay_local.db"
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
     }
 
     @Provides

@@ -78,13 +78,16 @@ import com.aeroplay.app.core.designsystem.CoralRedAccent
 import com.aeroplay.app.core.designsystem.ElectricViolet
 import com.aeroplay.app.core.designsystem.ErrorStateCard
 import com.aeroplay.app.core.designsystem.GlassSurface
+import com.aeroplay.app.core.designsystem.RemotePlaylistDialog
 import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.designsystem.SkeletonVideoCard
 import com.aeroplay.app.core.designsystem.SourceModePill
 import com.aeroplay.app.core.designsystem.VideoFeedCard
 import com.aeroplay.app.core.model.ContentSourceType
+import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import com.aeroplay.app.core.model.PlaybackPosition
+import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.VideoItem
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -102,11 +105,20 @@ fun HomeScreen(
     val savedPositions by viewModel.savedPositions.collectAsStateWithLifecycle()
     val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
+    val remotePlaylist by viewModel.remotePlaylistState.collectAsStateWithLifecycle()
     val refreshState = rememberPullToRefreshState()
     val floatingInset = LocalFloatingPlayerInset.current
 
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
     var showSourceSwitchDialog by remember { mutableStateOf(false) }
+
+    remotePlaylist?.let { state ->
+        RemotePlaylistDialog(
+            state = state,
+            onDismiss = viewModel::closeRemotePlaylist,
+            onPlay = viewModel::playRemotePlaylistVideo
+        )
+    }
 
     if (playlistTargetVideo != null) {
         AddToPlaylistDialog(
@@ -287,6 +299,46 @@ fun HomeScreen(
                 }
             }
 
+            if (personalized.musicVideos.isNotEmpty()) {
+                item {
+                    HorizontalVideoCarouselSection(
+                        title = if (personalized.hasMusicStyleContext) "Cùng phong cách" else "Khám phá nhạc Việt",
+                        icon = Icons.Filled.AutoAwesome,
+                        videos = personalized.musicVideos,
+                        savedPositions = savedPositions,
+                        onRecommendationImpression = viewModel::recordRecommendationImpression,
+                        onRecommendationAction = viewModel::actOnRecommendation,
+                        onVideoClick = { video -> viewModel.playVideo(video, personalized.musicVideos,
+                            "Cùng phong cách", radioMode = true) }
+                    )
+                }
+            }
+
+            if (personalized.popularMusicVideos.isNotEmpty()) {
+                item {
+                    HorizontalVideoCarouselSection(
+                        title = if (personalized.hasMusicStyleContext) "Nhạc nhiều lượt xem phù hợp" else "Nhạc nhiều lượt xem",
+                        icon = Icons.Filled.PlayArrow,
+                        videos = personalized.popularMusicVideos,
+                        savedPositions = savedPositions,
+                        onRecommendationImpression = viewModel::recordRecommendationImpression,
+                        onRecommendationAction = viewModel::actOnRecommendation,
+                        onVideoClick = { video -> viewModel.playVideo(video, personalized.popularMusicVideos,
+                            "Nhạc phổ biến cùng phong cách", radioMode = true) }
+                    )
+                }
+            }
+
+            if (personalized.musicPlaylists.isNotEmpty()) {
+                item {
+                    RemotePlaylistCarousel(
+                        playlists = personalized.musicPlaylists,
+                        title = if (personalized.hasMusicStyleContext) "Playlist cùng phong cách" else "Playlist nhạc Việt",
+                        onPlaylistClick = viewModel::openRemotePlaylist
+                    )
+                }
+            }
+
             // 3. Favorites Section (if not empty)
             if (favorites.isNotEmpty()) {
                 item {
@@ -397,6 +449,57 @@ fun HomeScreen(
                             },
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RemotePlaylistCarousel(
+    playlists: List<PlaylistItem>,
+    title: String,
+    onPlaylistClick: (PlaylistItem) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        Spacer(Modifier.height(10.dp))
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(playlists, key = { "remote_playlist_${it.id}" }) { playlist ->
+                Card(
+                    modifier = Modifier.width(220.dp).clickable { onPlaylistClick(playlist) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column {
+                        AsyncImage(
+                            model = playlist.thumbnailUrl,
+                            contentDescription = playlist.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f)
+                        )
+                        Column(Modifier.padding(11.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(playlist.title, style = MaterialTheme.typography.titleSmall,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            val metadata = buildList {
+                                if (playlist.uploaderName.isNotBlank()) add(playlist.uploaderName)
+                                if (playlist.streamCount > 0L) add("${playlist.streamCount} bài")
+                            }.joinToString(" • ")
+                            if (metadata.isNotBlank()) {
+                                Text(metadata, style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
                     }
                 }
             }
@@ -609,7 +712,9 @@ fun SourceSelectionDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                ContentSourceType.onlineSources.forEach { source ->
+                ContentSourceType.onlineSources
+                    .filter { source -> source != ContentSourceType.EXPERIMENTAL_EXTRACTOR || YouTubePolicyFeatureFlags.allowNewPipeYouTube }
+                    .forEach { source ->
                     val isSelected = source == currentSource
                     Surface(
                         modifier = Modifier

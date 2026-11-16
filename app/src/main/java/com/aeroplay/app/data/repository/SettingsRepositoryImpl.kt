@@ -11,6 +11,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.aeroplay.app.core.model.AppSettings
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.ThemeMode
+import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -38,6 +39,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val PAUSE_HEADPHONE = booleanPreferencesKey("pause_on_headphone_disconnect")
         val PIP_ENABLED = booleanPreferencesKey("pip_enabled")
         val BG_PLAYBACK = booleanPreferencesKey("background_playback_enabled")
+        val AUTO_SIMILAR_MUSIC = booleanPreferencesKey("auto_play_similar_music")
     }
 
     override val settingsFlow: Flow<AppSettings> = context.aeroPlayDataStore.data.map { prefs ->
@@ -45,9 +47,12 @@ class SettingsRepositoryImpl @Inject constructor(
             runCatching { ThemeMode.valueOf(it) }.getOrNull()
         } ?: ThemeMode.LIGHT
 
-        val source = prefs[Keys.SOURCE_TYPE]?.let {
+        val configuredSource = prefs[Keys.SOURCE_TYPE]?.let {
             runCatching { ContentSourceType.valueOf(it) }.getOrNull()
         } ?: ContentSourceType.DEMO_LOCAL
+        val source = if (!YouTubePolicyFeatureFlags.allowNewPipeYouTube &&
+            configuredSource == ContentSourceType.EXPERIMENTAL_EXTRACTOR
+        ) ContentSourceType.DEMO_LOCAL else configuredSource
 
         AppSettings(
             themeMode = theme,
@@ -59,7 +64,8 @@ class SettingsRepositoryImpl @Inject constructor(
             autoAudioOnlyWhenBackground = prefs[Keys.AUTO_AUDIO_ONLY] ?: false,
             pauseOnHeadphoneDisconnect = prefs[Keys.PAUSE_HEADPHONE] ?: true,
             pipEnabled = prefs[Keys.PIP_ENABLED] ?: true,
-            backgroundPlaybackEnabled = prefs[Keys.BG_PLAYBACK] ?: true
+            backgroundPlaybackEnabled = prefs[Keys.BG_PLAYBACK] ?: true,
+            autoPlaySimilarMusic = prefs[Keys.AUTO_SIMILAR_MUSIC] ?: true
         )
     }
 
@@ -70,8 +76,11 @@ class SettingsRepositoryImpl @Inject constructor(
     }
 
     override suspend fun setActiveSourceType(sourceType: ContentSourceType, warningAccepted: Boolean) {
+        val safeSource = if (!YouTubePolicyFeatureFlags.allowNewPipeYouTube &&
+            sourceType == ContentSourceType.EXPERIMENTAL_EXTRACTOR
+        ) ContentSourceType.DEMO_LOCAL else sourceType
         context.aeroPlayDataStore.edit {
-            it[Keys.SOURCE_TYPE] = sourceType.name
+            it[Keys.SOURCE_TYPE] = safeSource.name
             if (warningAccepted) {
                 it[Keys.WARNING_ACCEPTED] = true
             }
@@ -104,5 +113,9 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setBackgroundPlaybackEnabled(enabled: Boolean) {
         context.aeroPlayDataStore.edit { it[Keys.BG_PLAYBACK] = enabled }
+    }
+
+    override suspend fun setAutoPlaySimilarMusic(enabled: Boolean) {
+        context.aeroPlayDataStore.edit { it[Keys.AUTO_SIMILAR_MUSIC] = enabled }
     }
 }

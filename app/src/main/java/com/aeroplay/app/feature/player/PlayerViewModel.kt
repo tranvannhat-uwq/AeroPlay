@@ -67,12 +67,13 @@ class PlayerViewModel @Inject constructor(
 
     fun retryPlayback() = playbackController.retryCurrentVideo()
 
-    fun playRelatedOrQueueVideo(video: VideoItem, queue: List<VideoItem>, title: String) {
+    fun playRelatedOrQueueVideo(video: VideoItem, queue: List<VideoItem>, title: String, radioMode: Boolean) {
         playbackController.loadAndPlayVideo(
             video = video,
             queueItems = queue,
             queueTitle = title,
-            openFullPlayer = true
+            openFullPlayer = true,
+            radioMode = radioMode
         )
     }
 

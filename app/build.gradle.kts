@@ -15,6 +15,16 @@ val signingValues = Properties().apply {
 fun signingValue(name: String, local: String): String? = System.getenv(name) ?: signingValues.getProperty(local)
 val releaseStore = signingValue("AEROPLAY_KEYSTORE_PATH", "storeFile")
 val updateRepository = providers.gradleProperty("githubRepository").getOrElse("tranvannhat-uwq/AeroPlay")
+val youtubeWebClientId = providers.gradleProperty("youtubeOAuthWebClientId").getOrElse("")
+val youtubeSyncRequested = providers.gradleProperty("youtubeAccountSyncEnabled").getOrElse("false").toBoolean()
+val youtubeApiOnlyModeRequested = providers.gradleProperty("youtubeApiOnlyMode").getOrElse("false").toBoolean()
+require(youtubeWebClientId.isBlank() || youtubeWebClientId.endsWith(".apps.googleusercontent.com")) {
+    "youtubeOAuthWebClientId must be a Google OAuth Web client ID."
+}
+require(!youtubeSyncRequested || youtubeApiOnlyModeRequested) {
+    "YouTube account sync requires youtubeApiOnlyMode=true because the current NewPipe playback path is not an approved YouTube API player."
+}
+val youtubeAccountSyncEnabled = youtubeSyncRequested && youtubeApiOnlyModeRequested && youtubeWebClientId.isNotBlank()
 require(updateRepository.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"))) { "Invalid githubRepository" }
 
 android {
@@ -28,6 +38,9 @@ android {
         versionCode = providers.gradleProperty("appVersionCode").orNull?.toInt() ?: appVersion.getProperty("VERSION_CODE").toInt()
         versionName = providers.gradleProperty("appVersionName").orNull ?: appVersion.getProperty("VERSION_NAME")
         buildConfigField("String", "UPDATE_REPOSITORY", "\"$updateRepository\"")
+        buildConfigField("boolean", "YOUTUBE_ACCOUNT_SYNC_ENABLED", youtubeAccountSyncEnabled.toString())
+        buildConfigField("boolean", "YOUTUBE_API_ONLY_MODE", youtubeApiOnlyModeRequested.toString())
+        buildConfigField("String", "YOUTUBE_OAUTH_WEB_CLIENT_ID", "\"$youtubeWebClientId\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -122,6 +135,10 @@ dependencies {
 
     // DataStore Preferences
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.id)
+    implementation(libs.google.play.services.auth)
 
     // Hilt Dependency Injection
     implementation(libs.hilt.android)
@@ -135,6 +152,7 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.guava)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Experimental Extractor Source (NewPipeExtractor - GPLv3)
     implementation(libs.newpipe.extractor)

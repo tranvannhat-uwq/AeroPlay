@@ -65,6 +65,7 @@ import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
 import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
 import com.aeroplay.app.core.designsystem.ErrorStateCard
+import com.aeroplay.app.core.designsystem.RemotePlaylistDialog
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.designsystem.SkeletonVideoCard
 import com.aeroplay.app.core.designsystem.VideoFeedCard
@@ -81,9 +82,18 @@ fun SearchScreen(
     val history by viewModel.searchHistory.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     val playlists by viewModel.userPlaylists.collectAsStateWithLifecycle()
+    val remotePlaylist by viewModel.remotePlaylistState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
+
+    remotePlaylist?.let { state ->
+        RemotePlaylistDialog(
+            state = state,
+            onDismiss = viewModel::closeRemotePlaylist,
+            onPlay = viewModel::playRemotePlaylistVideo
+        )
+    }
 
     if (playlistTargetVideo != null) {
         AddToPlaylistDialog(
@@ -355,7 +365,7 @@ fun SearchScreen(
 
                         if (showPlaylists && uiState.playlists.isNotEmpty()) {
                             items(uiState.playlists, key = { "pl_${it.id}" }) { playlist ->
-                                PlaylistResultRow(playlist = playlist)
+                                PlaylistResultRow(playlist = playlist, onClick = { viewModel.openRemotePlaylist(playlist) })
                             }
                         }
 
@@ -489,9 +499,9 @@ private fun ChannelResultRow(channel: ChannelItem) {
 }
 
 @Composable
-private fun PlaylistResultRow(playlist: PlaylistItem) {
+private fun PlaylistResultRow(playlist: PlaylistItem, onClick: () -> Unit) {
     Surface(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface
     ) {
@@ -523,7 +533,10 @@ private fun PlaylistResultRow(playlist: PlaylistItem) {
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${playlist.uploaderName} • ${playlist.streamCount} video",
+                    text = buildString {
+                        append(playlist.uploaderName.ifBlank { "Playlist YouTube" })
+                        if (playlist.streamCount > 0L) append(" • ${playlist.streamCount} video")
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -1,6 +1,7 @@
 package com.aeroplay.app.feature.search
 
 import com.aeroplay.app.core.model.VideoItem
+import com.aeroplay.app.data.repository.MusicRecommendationRanker
 import java.text.Normalizer
 import java.time.Instant
 import java.time.ZoneId
@@ -237,19 +238,6 @@ object VideoSearchRanker {
 
 /** Related-video order is led by shared subject and channel, never raw popularity. */
 object RelatedVideoRanker {
-    fun rank(candidates: List<VideoItem>, current: VideoItem): List<VideoItem> {
-        val sourceTerms = SearchQueryAnalyzer.analyze(current.title).tokens.toSet()
-        val sourceChannel = SearchQueryAnalyzer.normalize(current.channelName)
-        return candidates.distinctBy { "${it.sourceType.name}:${it.id}" }
-            .filterNot { it.id == current.id || it.isLive }
-            .map { video ->
-                val text = SearchQueryAnalyzer.normalize("${video.title} ${video.channelName}")
-                val shared = sourceTerms.count { it in text }
-                val topical = if (sourceTerms.isEmpty()) 0.0 else shared.toDouble() / sourceTerms.size
-                val sameChannel = sourceChannel.isNotBlank() && SearchQueryAnalyzer.normalize(video.channelName) == sourceChannel
-                video to topical * 0.78 + if (sameChannel) 0.22 else 0.0
-            }
-            .sortedWith(compareByDescending<Pair<VideoItem, Double>> { it.second }.thenBy { it.first.title.lowercase(Locale.ROOT) })
-            .map { it.first }
-    }
+    fun rank(candidates: List<VideoItem>, current: VideoItem): List<VideoItem> =
+        MusicRecommendationRanker.rank(candidates, current)
 }

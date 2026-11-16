@@ -200,4 +200,112 @@ interface AeroPlayDao {
 
     @Query("DELETE FROM search_history")
     suspend fun clearSearchHistory()
+
+    // --- YouTube API account cache (partitioned by Google account, never used as player input) ---
+    @Query("SELECT * FROM youtube_liked_videos WHERE accountId = :accountId ORDER BY publishedAt DESC")
+    fun observeYouTubeLikedVideos(accountId: String): Flow<List<YouTubeLikedVideoEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertYouTubeLikedVideos(items: List<YouTubeLikedVideoEntity>)
+
+    @Query("DELETE FROM youtube_liked_videos WHERE accountId = :accountId")
+    suspend fun clearYouTubeLikedVideos(accountId: String)
+
+    @Transaction
+    suspend fun replaceYouTubeLikedVideos(accountId: String, items: List<YouTubeLikedVideoEntity>) {
+        clearYouTubeLikedVideos(accountId)
+        if (items.isNotEmpty()) insertYouTubeLikedVideos(items)
+    }
+
+    @Query("SELECT * FROM youtube_remote_playlists WHERE accountId = :accountId ORDER BY title COLLATE NOCASE")
+    fun observeYouTubePlaylists(accountId: String): Flow<List<YouTubeRemotePlaylistEntity>>
+
+    @Query("SELECT * FROM youtube_remote_playlist_items WHERE accountId = :accountId ORDER BY playlistId, position")
+    fun observeYouTubePlaylistItems(accountId: String): Flow<List<YouTubeRemotePlaylistItemEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertYouTubePlaylists(items: List<YouTubeRemotePlaylistEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertYouTubePlaylistItems(items: List<YouTubeRemotePlaylistItemEntity>)
+
+    @Query("DELETE FROM youtube_remote_playlist_items WHERE accountId = :accountId AND playlistId = :playlistId")
+    suspend fun clearYouTubePlaylistItemsForPlaylist(accountId: String, playlistId: String)
+
+    @Transaction
+    suspend fun replaceYouTubePlaylistItems(
+        accountId: String,
+        playlistId: String,
+        items: List<YouTubeRemotePlaylistItemEntity>
+    ) {
+        clearYouTubePlaylistItemsForPlaylist(accountId, playlistId)
+        if (items.isNotEmpty()) insertYouTubePlaylistItems(items)
+    }
+
+    @Query("DELETE FROM youtube_remote_playlists WHERE accountId = :accountId")
+    suspend fun clearYouTubePlaylists(accountId: String)
+
+    @Query("DELETE FROM youtube_remote_playlist_items WHERE accountId = :accountId")
+    suspend fun clearAllYouTubePlaylistItems(accountId: String)
+
+    @Transaction
+    suspend fun replaceYouTubePlaylists(accountId: String, playlists: List<YouTubeRemotePlaylistEntity>) {
+        clearYouTubePlaylists(accountId)
+        if (playlists.isNotEmpty()) insertYouTubePlaylists(playlists)
+    }
+
+    @Query("SELECT * FROM youtube_subscriptions WHERE accountId = :accountId ORDER BY channelTitle COLLATE NOCASE")
+    fun observeYouTubeSubscriptions(accountId: String): Flow<List<YouTubeSubscriptionEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertYouTubeSubscriptions(items: List<YouTubeSubscriptionEntity>)
+
+    @Query("DELETE FROM youtube_subscriptions WHERE accountId = :accountId")
+    suspend fun clearYouTubeSubscriptions(accountId: String)
+
+    @Transaction
+    suspend fun replaceYouTubeSubscriptions(accountId: String, items: List<YouTubeSubscriptionEntity>) {
+        clearYouTubeSubscriptions(accountId)
+        if (items.isNotEmpty()) insertYouTubeSubscriptions(items)
+    }
+
+    @Query("DELETE FROM youtube_liked_videos WHERE cachedAtEpochMs < :cutoffEpochMs")
+    suspend fun pruneExpiredYouTubeLikes(cutoffEpochMs: Long)
+
+    @Query("DELETE FROM youtube_remote_playlists WHERE cachedAtEpochMs < :cutoffEpochMs")
+    suspend fun pruneExpiredYouTubePlaylists(cutoffEpochMs: Long)
+
+    @Query("DELETE FROM youtube_remote_playlist_items WHERE cachedAtEpochMs < :cutoffEpochMs")
+    suspend fun pruneExpiredYouTubePlaylistItems(cutoffEpochMs: Long)
+
+    @Query("DELETE FROM youtube_subscriptions WHERE cachedAtEpochMs < :cutoffEpochMs")
+    suspend fun pruneExpiredYouTubeSubscriptions(cutoffEpochMs: Long)
+
+    @Query("DELETE FROM youtube_liked_videos WHERE substr(accountId, 1, length(:accountIdentity)) = :accountIdentity AND substr(accountId, length(:accountIdentity) + 1, 1) = '|'")
+    suspend fun deleteYouTubeLikesForAccountIdentity(accountIdentity: String)
+
+    @Query("DELETE FROM youtube_remote_playlists WHERE substr(accountId, 1, length(:accountIdentity)) = :accountIdentity AND substr(accountId, length(:accountIdentity) + 1, 1) = '|'")
+    suspend fun deleteYouTubePlaylistsForAccountIdentity(accountIdentity: String)
+
+    @Query("DELETE FROM youtube_remote_playlist_items WHERE substr(accountId, 1, length(:accountIdentity)) = :accountIdentity AND substr(accountId, length(:accountIdentity) + 1, 1) = '|'")
+    suspend fun deleteYouTubePlaylistItemsForAccountIdentity(accountIdentity: String)
+
+    @Query("DELETE FROM youtube_subscriptions WHERE substr(accountId, 1, length(:accountIdentity)) = :accountIdentity AND substr(accountId, length(:accountIdentity) + 1, 1) = '|'")
+    suspend fun deleteYouTubeSubscriptionsForAccountIdentity(accountIdentity: String)
+
+    @Transaction
+    suspend fun deleteAllYouTubeDataForAccountIdentity(accountIdentity: String) {
+        deleteYouTubeLikesForAccountIdentity(accountIdentity)
+        deleteYouTubePlaylistItemsForAccountIdentity(accountIdentity)
+        deleteYouTubePlaylistsForAccountIdentity(accountIdentity)
+        deleteYouTubeSubscriptionsForAccountIdentity(accountIdentity)
+    }
+
+    @Transaction
+    suspend fun pruneExpiredYouTubeData(cutoffEpochMs: Long) {
+        pruneExpiredYouTubeLikes(cutoffEpochMs)
+        pruneExpiredYouTubePlaylistItems(cutoffEpochMs)
+        pruneExpiredYouTubePlaylists(cutoffEpochMs)
+        pruneExpiredYouTubeSubscriptions(cutoffEpochMs)
+    }
 }

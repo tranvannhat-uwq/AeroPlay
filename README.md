@@ -5,16 +5,18 @@
 - [Tải APK từ GitHub Releases](https://github.com/tranvannhat-uwq/AeroPlay/releases/latest)
 - [Cập nhật trực tiếp trong ứng dụng và cách phát hành bản mới](GITHUB_RELEASES.md)
 - [Nguồn và ghi công tài nguyên media](OPEN_MEDIA_ASSETS.md)
+- [Cấu hình Google OAuth để bật tài khoản YouTube chỉ đọc](GOOGLE_OAUTH_SETUP.md)
 
 ## Tính năng
 
 - Giao diện Liquid Glass sáng, vuốt thu video thành cửa sổ nổi và vuốt lên để mở rộng.
 - Trình phát ngang ẩn thanh hệ thống; nút điều khiển tự ẩn sau 4 giây.
-- Gợi ý Dành cho bạn dựa trên lịch sử xem và nguồn nội dung đang dùng.
+- Gợi ý Dành cho bạn theo lịch sử xem; khi phát nhạc có radio cùng phong cách, hạn chế lặp phiên bản cùng ca khúc, cùng kênh và thêm các nhóm nhạc phổ biến/playlist khi nguồn trả dữ liệu.
 - Thư viện video từ thiết bị, chọn từ Ảnh/Thư viện ảnh hoặc chia sẻ sang AeroPlay, phát ngoại tuyến và phát nền.
 - Nguồn YouTube qua NewPipe Extractor và catalog Chuẩn Mở riêng.
 - Tìm kiếm, chọn chất lượng, phát video/audio, hàng đợi, mini player, phát nền và PiP.
 - Lịch sử, vị trí xem dở, yêu thích và playlist lưu cục bộ bằng Room.
+- Tài khoản YouTube tùy chọn: đọc video đã thích, playlist và kênh đăng ký qua YouTube Data API v3; cần tự cấu hình OAuth và bật API-only mode. Xem [giới hạn/chính sách](YOUTUBE_API_LIMITATIONS.md) trước khi tạo bản bật tài khoản.
 - Cập nhật bằng GitHub Releases: kiểm tra bản mới, tải APK trong nền, kiểm tra hash/certificate và mở trình cài Android.
 
 Nguồn YouTube phụ thuộc khả năng trích xuất tại thời điểm truy cập. Ứng dụng không vượt CAPTCHA, DRM, đăng nhập hoặc giới hạn truy cập. Catalog Chuẩn Mở gồm phim/clip thật; các ảnh được đóng gói để không phụ thuộc máy chủ ảnh bên ngoài.

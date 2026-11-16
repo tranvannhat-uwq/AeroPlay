@@ -124,13 +124,30 @@ data class PlaylistItem(
     val uploaderName: String,
     val thumbnailUrl: String,
     val streamCount: Long,
-    val sourceType: ContentSourceType = ContentSourceType.DEMO_LOCAL
+    val sourceType: ContentSourceType = ContentSourceType.DEMO_LOCAL,
+    val description: String = ""
+)
+
+data class RemotePlaylistDetail(
+    val playlist: PlaylistItem,
+    val videos: List<VideoItem>,
+    val hasMore: Boolean = false
+)
+
+data class RemotePlaylistUiState(
+    val playlist: PlaylistItem,
+    val isLoading: Boolean = true,
+    val videos: List<VideoItem> = emptyList(),
+    val error: String? = null,
+    val hasMore: Boolean = false
 )
 
 data class PlaybackQueue(
     val items: List<VideoItem> = emptyList(),
     val currentIndex: Int = -1,
-    val queueTitle: String = "Danh sách phát"
+    val queueTitle: String = "Danh sách phát",
+    val radioMode: Boolean = false,
+    val autoRadioAfterEnd: Boolean = false
 ) {
     val currentItem: VideoItem?
         get() = items.getOrNull(currentIndex)
@@ -257,5 +274,6 @@ data class AppSettings(
     val autoAudioOnlyWhenBackground: Boolean = false,
     val pauseOnHeadphoneDisconnect: Boolean = true,
     val pipEnabled: Boolean = true,
-    val backgroundPlaybackEnabled: Boolean = true
+    val backgroundPlaybackEnabled: Boolean = true,
+    val autoPlaySimilarMusic: Boolean = true
 )

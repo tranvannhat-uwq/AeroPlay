@@ -65,7 +65,7 @@ flowchart TD
 - `com.aeroplay.app.core.network`: `NewPipeOkHttpDownloader`, `NetworkConnectivityObserver`, `NetworkModule`.
 - `com.aeroplay.app.core.designsystem`: Hệ màu 2026 Obsidian/Coral/Violet (`Theme.kt`), `FloatingNavigationBar`, `VideoFeedCard`, `SkeletonVideoCard`, `ErrorStateCard`.
 - `com.aeroplay.app.data.source`: `DemoLocalMediaSource` và `ExperimentalExtractorSource`.
-- `com.aeroplay.app.data.repository`: 8 interface repository cốt lõi cùng các lớp triển khai Hilt Singleton.
+- `com.aeroplay.app.data.repository`: các repository cốt lõi cùng các lớp triển khai Hilt Singleton; `PersonalizedRecommendations` tạo feed, `MusicRecommendations` nhận diện ca khúc/xếp hạng nhạc và `RemotePlaylistRepository` mở playlist nguồn.
 - `com.aeroplay.app.playback.service`: `AeroPlayMediaService` (`MediaSessionService`).
 - `com.aeroplay.app.playback.controller`: `PlaybackControllerManager`.
 - `com.aeroplay.app.playback.pip`: `PipController`.
@@ -79,7 +79,8 @@ flowchart TD
 2. **Tìm kiếm có Debounce và Hủy Request:**
    - Trong `SearchViewModel`, luồng nhập từ khóa được áp dụng `.debounce(400L).distinctUntilChanged().collectLatest { ... }`.
    - Khi người dùng gõ từ khóa mới hoặc rời màn hình, `collectLatest` / `activeSearchJob?.cancel()` sẽ hủy coroutine cũ. Nhờ `runInterruptible(Dispatchers.IO)` trong `ExperimentalExtractorSource`, luồng mạng `OkHttp` đang chạy bị ngắt ngay lập tức.
-3. **Lưu trữ thư viện cá nhân:**
+3. **Đề xuất nhạc và playlist:** `MusicSuggestionRepository` xếp video liên quan theo phong cách, giảm video cùng ca khúc và cùng kênh, rồi tìm một truy vấn nhạc có giới hạn khi cần thêm ứng viên. `PlaybackQueue.radioMode` đánh dấu phiên nghe để danh sách trên player, nút Next và tự phát dùng chung một thứ tự. `RemotePlaylistRepository` đọc các trang đầu playlist nguồn để phát theo thứ tự; phần còn lại được báo là chưa tải.
+4. **Lưu trữ thư viện cá nhân:**
    - Mọi thao tác thêm yêu thích, tạo/đổi tên/xóa playlist, lưu lịch sử xem và tiến trình phát (`PlaybackPosition`) đều ghi xuống `AeroPlayDatabase` (Room) và cập nhật giao diện phản ứng (reactive) qua `Flow`.
 
 ---

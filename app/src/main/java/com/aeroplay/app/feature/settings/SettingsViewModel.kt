@@ -9,6 +9,7 @@ import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.ThemeMode
 import com.aeroplay.app.data.repository.PersonalizedRecommendations
 import com.aeroplay.app.data.repository.SettingsRepository
+import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import com.aeroplay.app.updates.AppUpdateManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,6 +48,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setSourceType(sourceType: ContentSourceType) {
+        if (sourceType == ContentSourceType.EXPERIMENTAL_EXTRACTOR &&
+            !YouTubePolicyFeatureFlags.allowNewPipeYouTube
+        ) {
+            _statusToastMessage.value = "NewPipe bị khóa khi chế độ YouTube API chỉ đọc đang bật."
+            return
+        }
         viewModelScope.launch {
             settingsRepository.setActiveSourceType(sourceType, warningAccepted = true)
             _statusToastMessage.value = "Đã chuyển sang: ${sourceType.displayName}"
@@ -92,6 +99,12 @@ class SettingsViewModel @Inject constructor(
     fun setBackgroundPlayback(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setBackgroundPlaybackEnabled(enabled)
+        }
+    }
+
+    fun setAutoPlaySimilarMusic(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoPlaySimilarMusic(enabled)
         }
     }
 
