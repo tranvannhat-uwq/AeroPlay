@@ -1,8 +1,12 @@
 package com.aeroplay.app.feature.player
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -118,6 +122,7 @@ import com.aeroplay.app.core.designsystem.GlassSurface
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.core.model.StreamVariant
+import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import kotlinx.coroutines.delay
 
 @Composable
@@ -137,6 +142,26 @@ fun FullPlayerOverlay(
 
     val currentVideo = state.currentVideo ?: return
     val detail = state.currentDetail
+    val externalYouTubeUri = remember(currentVideo.id, currentVideo.url) {
+        if (YouTubePolicyFeatureFlags.apiOnlyMode && YouTubePolicyFeatureFlags.isYouTubeVideo(currentVideo)) {
+            Uri.parse(currentVideo.url).takeIf { YouTubePolicyFeatureFlags.isYouTubeUrl(currentVideo.url) }
+                ?: Uri.Builder()
+                    .scheme("https")
+                    .authority("www.youtube.com")
+                    .appendPath("watch")
+                    .appendQueryParameter("v", currentVideo.id)
+                    .build()
+        } else null
+    }
+
+    fun openYouTubeExternally() {
+        val uri = externalYouTubeUri ?: return
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        } catch (_: ActivityNotFoundException) {
+            Toast.makeText(context, "Không tìm thấy ứng dụng hoặc trình duyệt để mở video.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     var landscapeRequested by remember { mutableStateOf(false) }
     val orientation = LocalConfiguration.current.orientation
@@ -642,12 +667,22 @@ fun FullPlayerOverlay(
                     // Error state if stream extraction or playback failed
                     if (state.error != null) {
                         item {
-                            ErrorStateCard(
-                                title = "Không thể phát video này",
-                                message = state.error!!.message,
-                                technicalDetail = state.error!!.technicalDetail,
-                                onRetry = { viewModel.retryPlayback() }
-                            )
+                            Column {
+                                ErrorStateCard(
+                                    title = "Không thể phát video này",
+                                    message = state.error!!.message,
+                                    technicalDetail = state.error!!.technicalDetail,
+                                    onRetry = { viewModel.retryPlayback() }
+                                )
+                                if (externalYouTubeUri != null) {
+                                    TextButton(
+                                        onClick = { openYouTubeExternally() },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Mở video bằng ứng dụng YouTube")
+                                    }
+                                }
+                            }
                         }
                     }
 

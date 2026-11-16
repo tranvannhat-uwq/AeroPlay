@@ -1,3 +1,9 @@
+AeroPlay 2.0.2
+
+- Khi chế độ API-only chặn phát YouTube trong AeroPlay, thẻ lỗi có nút mở đúng video bằng ứng dụng YouTube hoặc trình duyệt.
+
+Cài đè bản cũ để giữ dữ liệu nếu chữ ký APK khớp. Android 8 trở lên.
+
 AeroPlay 2.0.1
 
 - Đề xuất radio nhạc theo phong cách bài đang phát; giảm lặp cùng ca khúc/kênh và bổ sung gợi ý bài phổ biến, playlist khi nguồn trả dữ liệu.

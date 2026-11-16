@@ -319,7 +319,7 @@ class PlaybackControllerManager @Inject constructor(
                     isLoadingMetadata = false,
                     isBuffering = false,
                     error = SourceError.PlaybackFailed(
-                        "Chế độ YouTube API chỉ đọc không phát luồng YouTube trong Media3. Mở video bằng ứng dụng YouTube chính thức."
+                        "Chế độ YouTube API chỉ đọc không phát luồng YouTube trong AeroPlay. Dùng nút bên dưới để mở video bằng YouTube."
                     )
                 )
             }
