@@ -122,7 +122,7 @@ fun SettingsScreen(
         ExperimentalSourceLimitationsDialog(onDismiss = { showLimitationsModal = false })
     }
 
-    if (showYouTubeAccount) {
+    if (showYouTubeAccount && YouTubePolicyFeatureFlags.accountSyncEnabled) {
         YouTubeAccountDialog(
             state = youtubeAccount,
             onDismiss = { showYouTubeAccount = false },
@@ -361,7 +361,7 @@ fun SettingsScreen(
             }
         }
 
-        item {
+        if (YouTubePolicyFeatureFlags.accountSyncEnabled) item {
             SettingsGroupCard(title = "Tài khoản YouTube") {
                 SettingsActionRow(
                     icon = Icons.Filled.AccountCircle,

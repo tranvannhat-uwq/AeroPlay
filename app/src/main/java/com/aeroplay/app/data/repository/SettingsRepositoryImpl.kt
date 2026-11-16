@@ -41,6 +41,7 @@ class SettingsRepositoryImpl @Inject constructor(
         val BG_PLAYBACK = booleanPreferencesKey("background_playback_enabled")
         val AUTO_SIMILAR_MUSIC = booleanPreferencesKey("auto_play_similar_music")
         val API_SOURCE_SELECTED = booleanPreferencesKey("youtube_api_source_selected_v1")
+        val PLAYER_SOURCE_SELECTED = booleanPreferencesKey("youtube_player_source_selected_v1")
     }
 
     override val settingsFlow: Flow<AppSettings> = context.aeroPlayDataStore.data.map { prefs ->
@@ -51,7 +52,9 @@ class SettingsRepositoryImpl @Inject constructor(
         val configuredSource = prefs[Keys.SOURCE_TYPE]?.let {
             runCatching { ContentSourceType.valueOf(it) }.getOrNull()
         } ?: ContentSourceType.DEMO_LOCAL
-        val source = if (YouTubePolicyFeatureFlags.apiOnlyMode && prefs[Keys.API_SOURCE_SELECTED] != true)
+        val needsYouTubeSource = if (YouTubePolicyFeatureFlags.apiOnlyMode)
+            prefs[Keys.API_SOURCE_SELECTED] != true else prefs[Keys.PLAYER_SOURCE_SELECTED] != true
+        val source = if (needsYouTubeSource)
             ContentSourceType.EXPERIMENTAL_EXTRACTOR else configuredSource
 
         AppSettings(
@@ -79,6 +82,7 @@ class SettingsRepositoryImpl @Inject constructor(
         context.aeroPlayDataStore.edit {
             it[Keys.SOURCE_TYPE] = sourceType.name
             it[Keys.API_SOURCE_SELECTED] = true
+            it[Keys.PLAYER_SOURCE_SELECTED] = true
             if (warningAccepted) {
                 it[Keys.WARNING_ACCEPTED] = true
             }

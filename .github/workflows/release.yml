@@ -39,14 +39,10 @@ jobs:
           AEROPLAY_KEYSTORE_PASSWORD: ${{ secrets.AEROPLAY_KEYSTORE_PASSWORD }}
           AEROPLAY_KEY_ALIAS: ${{ secrets.AEROPLAY_KEY_ALIAS }}
           AEROPLAY_KEY_PASSWORD: ${{ secrets.AEROPLAY_KEY_PASSWORD }}
-          YOUTUBE_OAUTH_WEB_CLIENT_ID: ${{ vars.YOUTUBE_OAUTH_WEB_CLIENT_ID }}
         run: |
           chmod +x gradlew
-          test -n "$YOUTUBE_OAUTH_WEB_CLIENT_ID" || { echo 'Set repository variable YOUTUBE_OAUTH_WEB_CLIENT_ID before publishing.'; exit 1; }
-          case "$YOUTUBE_OAUTH_WEB_CLIENT_ID" in *.apps.googleusercontent.com) ;; *) echo 'YOUTUBE_OAUTH_WEB_CLIENT_ID has an invalid format.'; exit 1 ;; esac
           ./gradlew testDebugUnitTest assembleRelease -PgithubRepository="$GITHUB_REPOSITORY" \
-            -PyoutubeOAuthWebClientId="$YOUTUBE_OAUTH_WEB_CLIENT_ID" \
-            -PyoutubeAccountSyncEnabled=true -PyoutubeApiOnlyMode=true --console=plain
+            -PyoutubeAccountSyncEnabled=false -PyoutubeApiOnlyMode=false --console=plain
       - name: Validate and package release assets
         run: |
           node scripts/create-release.mjs

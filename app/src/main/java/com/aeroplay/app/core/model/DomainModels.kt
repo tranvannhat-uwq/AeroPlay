@@ -10,7 +10,7 @@ enum class ContentSourceType(private val label: String, val isExperimental: Bool
         isExperimental = false
     ),
     EXPERIMENTAL_EXTRACTOR(
-        label = "Nguồn Thử Nghiệm (NewPipe Extractor)",
+        label = "YouTube (NewPipe)",
         isExperimental = true
     ),
     DEVICE_LOCAL("Video từ thiết bị", false);

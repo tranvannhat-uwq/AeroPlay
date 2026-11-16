@@ -2,6 +2,8 @@
 
 ## Trạng thái cấu hình hiện tại
 
+Từ bản phát hành 2.0.4, Google Sign-In/YouTube Data API bị tắt theo lựa chọn của người dùng để khôi phục NewPipe + Media3. Tài liệu dưới đây chỉ dành cho cấu hình API-only tùy chọn; bật lại sẽ đổi đường phát YouTube. Không cần cấu hình OAuth để dùng bản phát trực tiếp.
+
 Mã nguồn dùng Credential Manager để nhận diện tài khoản Google và Google `AuthorizationClient` để xin quyền YouTube riêng, theo từng ngữ cảnh. Ứng dụng chỉ gửi scope:
 
 ```text

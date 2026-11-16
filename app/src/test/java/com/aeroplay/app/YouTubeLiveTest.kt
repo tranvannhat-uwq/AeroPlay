@@ -6,6 +6,7 @@ import com.aeroplay.app.data.repository.StreamResolverImpl
 import com.aeroplay.app.data.source.ExperimentalExtractorSource
 import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -54,10 +55,30 @@ class YouTubeLiveTest {
         println("DETAIL id=${detail.id} video=${detail.streamVariants.size} audio=${detail.audioTracks.size}")
         val selection = StreamResolverImpl().resolveStream(detail).getOrThrow()
         for (url in listOfNotNull(selection.primaryUrl, selection.secondaryAudioUrl)) {
-            client.newCall(okhttp3.Request.Builder().url(url).header("Range", "bytes=0-1023").build()).execute().use { response ->
-                assertTrue("Selected stream HTTP ${response.code}", response.isSuccessful)
-                assertTrue("Selected stream must return bytes", (response.body?.source()?.readByteArray(128)?.size ?: 0) > 0)
+            var currentUrl = url
+            var mediaRead = false
+            // Follow HLS master/media playlists to verify media bytes, not only a readable manifest.
+            for (depth in 0 until 5) {
+                var nextUrl: String? = null
+                // Range can truncate a manifest's signed child URL. Read manifests whole, as Media3 does.
+                client.newCall(okhttp3.Request.Builder().url(currentUrl).build()).execute().use { response ->
+                    assertTrue("Selected stream HTTP ${response.code}", response.isSuccessful)
+                    val preview = response.peekBody(262_144).string()
+                    if (preview.trimStart().startsWith("#EXTM3U")) {
+                        val child = preview.lineSequence().map(String::trim).firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+                        requireNotNull(child) { "HLS playlist has no child stream" }
+                        nextUrl = currentUrl.toHttpUrl().resolve(child)?.toString()
+                    } else {
+                        val type = response.header("Content-Type").orEmpty()
+                        assertTrue("Expected media content, got $type", type.startsWith("video/") || type.startsWith("audio/") || type.startsWith("application/octet-stream"))
+                        assertTrue("Selected media must return bytes", (response.body?.source()?.readByteArray(128)?.size ?: 0) > 0)
+                        mediaRead = true
+                    }
+                }
+                if (mediaRead) break
+                currentUrl = requireNotNull(nextUrl) { "Invalid HLS child URL" }
             }
+            assertTrue("Could not reach media bytes within HLS depth limit", mediaRead)
         }
     }
 }

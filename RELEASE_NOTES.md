@@ -1,3 +1,12 @@
+AeroPlay 2.0.4
+
+- Khôi phục phát video YouTube trực tiếp trong AeroPlay bằng NewPipe + Media3, hàng đợi, chọn chất lượng, phát nền và PiP.
+- Nguồn mặc định khi nâng cấp là YouTube (NewPipe); vẫn có thể tự chọn Nguồn mở hoặc video từ thiết bị.
+- Tắt tích hợp Google Sign-In/YouTube Data API và màn hình tài khoản trong bản phát hành này theo lựa chọn của người dùng. Lịch sử, yêu thích và playlist cục bộ được giữ nguyên; dữ liệu tài khoản YouTube không tiếp tục đồng bộ.
+- Trình phát nhúng chỉ dành cho cấu hình API-only, không được dùng trong bản này. Nguồn trích xuất vẫn phụ thuộc khả năng truy cập tại từng thời điểm.
+
+Cài đè bản cũ để giữ dữ liệu. Android 8 trở lên.
+
 AeroPlay 2.0.3
 
 - Video đã thích, video trong playlist tài khoản và video YouTube trong thư viện mở trình phát YouTube chính thức ngay trong AeroPlay.

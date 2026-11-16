@@ -18,7 +18,8 @@ object YouTubePolicyFeatureFlags {
     val allowNewPipeYouTube: Boolean
         get() = !apiOnlyMode
 
-    const val allowYouTubePlaybackWithMedia3 = false
+    val allowYouTubePlaybackWithMedia3: Boolean
+        get() = !apiOnlyMode && !accountSyncEnabled
 
     fun isYouTubeVideo(video: VideoItem): Boolean =
         video.sourceType == ContentSourceType.EXPERIMENTAL_EXTRACTOR || isYouTubeUrl(video.url)

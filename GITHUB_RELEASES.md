@@ -4,7 +4,7 @@ Kho chính thức: https://github.com/tranvannhat-uwq/AeroPlay
 
 ## Cách dùng trên điện thoại
 
-Cài AeroPlay 1.1.0 trở lên một lần để có tính năng cập nhật (bản mới nhất là 2.0.0). Sau đó vào **Cài đặt → Cập nhật ứng dụng → Kiểm tra cập nhật**. Khi có bản mới, chọn **Tải cập nhật**, chờ kiểm tra APK, rồi chọn **Cài đặt**. Android 8+ có thể yêu cầu bật “Cho phép từ nguồn này” cho AeroPlay. Android vẫn yêu cầu xác nhận cài, ứng dụng không cài ngầm.
+Cài AeroPlay 1.1.0 trở lên một lần để có tính năng cập nhật (bản mới nhất là 2.0.4). Sau đó vào **Cài đặt → Cập nhật ứng dụng → Kiểm tra cập nhật**. Khi có bản mới, chọn **Tải cập nhật**, chờ kiểm tra APK, rồi chọn **Cài đặt**. Android 8+ có thể yêu cầu bật “Cho phép từ nguồn này” cho AeroPlay. Android vẫn yêu cầu xác nhận cài, ứng dụng không cài ngầm.
 
 Ứng dụng cũng tự kiểm tra khi mở, tối đa mỗi 24 giờ. Kiểm tra thủ công luôn có thể chạy lại. APK được tải bằng DownloadManager vào thư mục riêng của ứng dụng; bản tải tiếp tục trong nền và được khôi phục theo dõi sau khi mở lại. Trước khi mở trình cài đặt, AeroPlay kiểm tra kích thước, SHA-256, package `com.aeroplay.app`, versionCode, minSdk và certificate phải khớp bản đang cài. Không cần tài khoản GitHub hoặc token trong ứng dụng.
 
@@ -35,14 +35,13 @@ Không chỉ upload APK vào một thư mục của repository: updater đọc *
 
 Khóa ký tương thích với APK đã gửi trước đã được lưu riêng ở `.private/aeroplay-release.p12`; cấu hình local ở `.private/signing.properties`. Hai tệp này được Git bỏ qua và không nằm trong source ZIP. Hãy lưu bản sao riêng của chúng; không upload vào repository public.
 
-GitHub Actions cần các secrets: `AEROPLAY_KEYSTORE_BASE64`, `AEROPLAY_KEYSTORE_PASSWORD`, `AEROPLAY_KEY_ALIAS`, `AEROPLAY_KEY_PASSWORD`, cùng repository variable `YOUTUBE_OAUTH_WEB_CLIENT_ID` (Web application Client ID công khai). Đặt variable tại **Settings → Secrets and variables → Actions → Variables**. Workflow khôi phục khóa vào thư mục tạm của runner rồi xóa sau build; bản phát hành bật tài khoản YouTube và API-only mode. Fingerprint công khai được ghim trong `signing-certificate-sha256.txt` để không phát hành nhầm APK khác khóa. Không tạo khóa mới nếu còn cần cập nhật đè lên bản người dùng đang cài.
+GitHub Actions cần các secrets: `AEROPLAY_KEYSTORE_BASE64`, `AEROPLAY_KEYSTORE_PASSWORD`, `AEROPLAY_KEY_ALIAS`, `AEROPLAY_KEY_PASSWORD`. Workflow khôi phục khóa vào thư mục tạm của runner rồi xóa sau build; từ 2.0.4, bản phát hành tắt tài khoản YouTube và API-only mode để dùng NewPipe + Media3. Fingerprint công khai được ghim trong `signing-certificate-sha256.txt` để không phát hành nhầm APK khác khóa. Không tạo khóa mới nếu còn cần cập nhật đè lên bản người dùng đang cài.
 
-Build local bằng JDK 17 hoặc 21, Android SDK 35, và cùng Web Client ID:
+Build local bằng JDK 17 hoặc 21, Android SDK 35, không cần OAuth Client ID cho bản phát trực tiếp:
 
 ```shell
 ./gradlew testDebugUnitTest assembleRelease \
-  -PyoutubeOAuthWebClientId="$YOUTUBE_OAUTH_WEB_CLIENT_ID" \
-  -PyoutubeAccountSyncEnabled=true -PyoutubeApiOnlyMode=true
+  -PyoutubeAccountSyncEnabled=false -PyoutubeApiOnlyMode=false
 node scripts/create-release.mjs
 ```
 

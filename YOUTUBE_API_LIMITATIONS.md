@@ -1,5 +1,7 @@
 # Giới hạn và ranh giới chính sách YouTube
 
+Bản phát hành 2.0.4 tắt Google/YouTube API và API-only mode theo lựa chọn của người dùng, dùng NewPipe + Media3. Các mục về dữ liệu tài khoản và trình phát nhúng bên dưới chỉ áp dụng khi tự build cấu hình API-only. Không xem việc tắt API là chứng nhận tuân thủ cho trình phát không chính thức.
+
 ## Có thể đọc qua API đã cấp quyền
 
 - Thông tin channel mà YouTube Data API trả về cho `channels.list(mine=true)`.
