@@ -1,3 +1,10 @@
+AeroPlay 2.0.5
+
+- Giữ màn hình sáng khi xem video trong trình phát đầy đủ (dọc/ngang), kể cả lúc chờ tải tiếp, để tránh tự tắt theo timeout của điện thoại.
+- Nhả giữ sáng khi tạm dừng, phát xong, đóng/thu nhỏ trình phát, chuyển audio-only, PiP hoặc ra nền. Không thay đổi cài đặt timeout hoặc dùng wake lock.
+
+Cài đè để giữ dữ liệu. Cần thử trên điện thoại với timeout 1 phút: phát hơn 2 phút không chạm màn hình, rồi Pause và xác nhận timeout hoạt động trở lại.
+
 AeroPlay 2.0.4
 
 - Khôi phục phát video YouTube trực tiếp trong AeroPlay bằng NewPipe + Media3, hàng đợi, chọn chất lượng, phát nền và PiP.

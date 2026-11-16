@@ -142,6 +142,12 @@ fun FullPlayerOverlay(
 
     val currentVideo = state.currentVideo ?: return
     val detail = state.currentDetail
+    PlaybackScreenAwakeEffect(
+        activity = activity,
+        player = player,
+        enabled = state.isFullPlayerOpen && !state.isInPipMode &&
+            !state.isAudioOnlyMode && state.error == null
+    )
     val externalYouTubeUri = remember(currentVideo.id, currentVideo.url) {
         if (YouTubePolicyFeatureFlags.apiOnlyMode && YouTubePolicyFeatureFlags.isYouTubeVideo(currentVideo)) {
             Uri.parse(currentVideo.url).takeIf { YouTubePolicyFeatureFlags.isYouTubeUrl(currentVideo.url) }
