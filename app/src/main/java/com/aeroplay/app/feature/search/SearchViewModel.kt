@@ -73,8 +73,21 @@ class SearchViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val remotePlaylistRepository: RemotePlaylistRepository,
     private val playbackController: PlaybackControllerManager,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private val libraryPreferences: com.aeroplay.app.data.repository.LibraryPreferencesRepository
 ) : ViewModel() {
+    private val notice = MutableStateFlow<String?>(null)
+    val restrictionNotice = notice.asStateFlow()
+    fun clearRestrictionNotice() { notice.value = null }
+    fun restrictVideo(video: VideoItem) {
+        viewModelScope.launch {
+            try {
+                libraryPreferences.restrictVideo(video)
+                notice.value = "Đã thêm vào danh sách hạn chế"
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { notice.value = "Chưa lưu được lựa chọn. Hãy thử lại." }
+        }
+    }
 
     private val _uiState = MutableStateFlow(
         SearchUiState(

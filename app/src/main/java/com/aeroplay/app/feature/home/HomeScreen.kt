@@ -92,6 +92,7 @@ import com.aeroplay.app.core.model.PlaybackPosition
 import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.core.model.AutoMix
+import androidx.compose.material.icons.filled.Tune
 import com.aeroplay.app.core.model.RemotePlaylistUiState
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -104,6 +105,15 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val settings by viewModel.settingsState.collectAsStateWithLifecycle()
     val personalized by viewModel.personalizedState.collectAsStateWithLifecycle()
+    val restrictionNotice by viewModel.restrictionNotice.collectAsStateWithLifecycle()
+    val noticeContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(restrictionNotice) {
+        restrictionNotice?.let {
+            android.widget.Toast.makeText(noticeContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearRestrictionNotice()
+        }
+    }
+    val autoMixes by viewModel.autoMixes.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val favoriteIds by viewModel.favoriteIds.collectAsStateWithLifecycle()
     val savedPositions by viewModel.savedPositions.collectAsStateWithLifecycle()
@@ -116,17 +126,14 @@ fun HomeScreen(
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
     var showSourceSwitchDialog by remember { mutableStateOf(false) }
     var selectedMix by remember { mutableStateOf<AutoMix?>(null) }
+    val mixEditor: MixEditorViewModel = androidx.hilt.navigation.compose.hiltViewModel()
 
     selectedMix?.let { mix ->
-        RemotePlaylistDialog(
-            state = RemotePlaylistUiState(
-                playlist = PlaylistItem(mix.id, "", mix.title, "AeroPlay • Tự động kết hợp",
-                    mix.videos.firstOrNull()?.thumbnailUrl.orEmpty(), mix.videos.size.toLong(),
-                    mix.videos.firstOrNull()?.sourceType ?: settings.activeSourceType),
-                isLoading = false, videos = mix.videos),
-            onDismiss = { selectedMix = null },
-            onPlay = { video, _, _ -> viewModel.playAutoMix(mix, video); selectedMix = null },
-            playLabel = "Phát bản phối"
+        AutoMixDialog(
+            mix = mix,
+            viewModel = mixEditor,
+            onDismiss = { mixEditor.close(); selectedMix = null },
+            onPlay = { edited, video -> viewModel.playAutoMix(edited, video); mixEditor.close(); selectedMix = null }
         )
     }
 
@@ -189,11 +196,10 @@ fun HomeScreen(
                     FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         AeroPlayWordmark(Modifier.align(Alignment.CenterVertically))
-                        SourceModePill(
-                            sourceType = settings.activeSourceType,
-                            modifier = Modifier.align(Alignment.CenterVertically),
-                            onClick = { showSourceSwitchDialog = true }
-                        )
+                        IconButton(onClick = { showSourceSwitchDialog = true }) {
+                            Icon(Icons.Filled.Tune, contentDescription = "Chọn nguồn nội dung",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -223,7 +229,7 @@ fun HomeScreen(
                                 text = if (settings.activeSourceType.isExperimental && YouTubePolicyFeatureFlags.apiOnlyMode) {
                                     "Tìm video YouTube..."
                                 } else if (settings.activeSourceType.isExperimental) {
-                                    "Tìm kiếm video, kênh hoặc playlist (Extractor)..."
+                                    "Tìm kiếm video, kênh hoặc playlist..."
                                 } else {
                                     "Tìm kiếm video mở, phim Blender, luồng kiểm thử..."
                                 },
@@ -237,8 +243,8 @@ fun HomeScreen(
                 }
             }
 
-            if (personalized.autoMixes.isNotEmpty()) {
-                item { AutoMixCarousel(personalized.autoMixes, onOpen = { selectedMix = it }) }
+            if (autoMixes.isNotEmpty()) {
+                item { AutoMixCarousel(autoMixes, onOpen = { mixEditor.open(it); selectedMix = it }) }
             }
 
             if (continueWatching.isNotEmpty()) {
@@ -356,7 +362,7 @@ fun HomeScreen(
                         text = if (settings.activeSourceType.isExperimental && YouTubePolicyFeatureFlags.apiOnlyMode) {
                             "YouTube • Video phổ biến tại Việt Nam"
                         } else if (settings.activeSourceType.isExperimental) {
-                            "Khám phá trên YouTube (Extractor)"
+                            "Khám phá trên YouTube"
                         } else {
                             "Video Chuẩn Mở Đề Xuất"
                         },
@@ -632,7 +638,8 @@ private fun RecommendationActionsMenu(
                 RecommendationAction.NOT_INTERESTED to "Không quan tâm",
                 RecommendationAction.BLOCK_CHANNEL to "Không đề xuất kênh này",
                 RecommendationAction.MARK_WATCHED to "Đã xem",
-                RecommendationAction.WATCH_LATER to "Xem sau"
+                RecommendationAction.WATCH_LATER to "Xem sau",
+                RecommendationAction.RESTRICT to "Hạn chế gợi ý tương tự"
             ).forEach { (action, label) ->
                 DropdownMenuItem(
                     text = { Text(label) },

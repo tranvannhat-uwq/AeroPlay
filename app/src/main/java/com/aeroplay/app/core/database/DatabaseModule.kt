@@ -72,6 +72,17 @@ object DatabaseModule {
         }
     }
 
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""CREATE TABLE IF NOT EXISTS edited_mixes (
+                mixId TEXT NOT NULL PRIMARY KEY, title TEXT NOT NULL, subtitle TEXT NOT NULL,
+                isMusic INTEGER NOT NULL, videosJson TEXT NOT NULL, updatedAtEpochMs INTEGER NOT NULL)""")
+            db.execSQL("""CREATE TABLE IF NOT EXISTS content_restrictions (
+                restrictionId TEXT NOT NULL PRIMARY KEY, kind TEXT NOT NULL, label TEXT NOT NULL,
+                videoJson TEXT NOT NULL, updatedAtEpochMs INTEGER NOT NULL)""")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AeroPlayDatabase {
@@ -79,7 +90,7 @@ object DatabaseModule {
             context,
             AeroPlayDatabase::class.java,
             "aeroplay_local.db"
-        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
+        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build()
     }
 
     @Provides

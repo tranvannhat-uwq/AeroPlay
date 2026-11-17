@@ -15,12 +15,14 @@ import androidx.room.RoomDatabase
         RecommendationFeedbackEntity::class,
         BlockedRecommendationChannelEntity::class,
         RecommendationImpressionEntity::class,
+        EditedMixEntity::class,
+        ContentRestrictionEntity::class,
         YouTubeLikedVideoEntity::class,
         YouTubeRemotePlaylistEntity::class,
         YouTubeRemotePlaylistItemEntity::class,
         YouTubeSubscriptionEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AeroPlayDatabase : RoomDatabase() {

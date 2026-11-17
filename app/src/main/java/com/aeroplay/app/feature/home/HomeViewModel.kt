@@ -21,6 +21,8 @@ import com.aeroplay.app.data.repository.PersonalizedRecommendations
 import com.aeroplay.app.data.repository.PersonalizedResult
 import com.aeroplay.app.data.repository.RemotePlaylistRepository
 import com.aeroplay.app.data.repository.MusicStyleAnalyzer
+import com.aeroplay.app.data.repository.LibraryPreferencesRepository
+import com.aeroplay.app.data.repository.ContentRestrictionPolicy
 import com.aeroplay.app.data.source.SourceErrorException
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +41,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -64,7 +67,7 @@ data class PersonalizedUiState(
     val autoMixes: List<AutoMix> = emptyList()
 )
 
-enum class RecommendationAction { NOT_INTERESTED, BLOCK_CHANNEL, MARK_WATCHED, WATCH_LATER }
+enum class RecommendationAction { NOT_INTERESTED, BLOCK_CHANNEL, MARK_WATCHED, WATCH_LATER, RESTRICT }
 
 @HiltViewModel
 @OptIn(FlowPreview::class)
@@ -75,18 +78,35 @@ class HomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val personalizedRecommendations: PersonalizedRecommendations,
     private val remotePlaylistRepository: RemotePlaylistRepository,
-    private val playbackController: PlaybackControllerManager
+    private val playbackController: PlaybackControllerManager,
+    private val libraryPreferences: LibraryPreferencesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    val uiState = combine(_uiState, libraryPreferences.restrictions) { state, restrictions ->
+        state.copy(recommendedVideos = ContentRestrictionPolicy.apply(state.recommendedVideos, restrictions))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     val settingsState: StateFlow<AppSettings> = settingsRepository.settingsFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppSettings())
+    private val notice = MutableStateFlow<String?>(null)
+    val restrictionNotice = notice.asStateFlow()
+    fun clearRestrictionNotice() { notice.value = null }
 
     private val recommendationRefresh = MutableStateFlow(0)
     private val personalized = MutableStateFlow(PersonalizedUiState())
-    val personalizedState = personalized.asStateFlow()
+    val personalizedState = combine(personalized, libraryPreferences.restrictions) { state, restrictions ->
+        state.copy(videos = ContentRestrictionPolicy.apply(state.videos, restrictions),
+            musicVideos = ContentRestrictionPolicy.apply(state.musicVideos, restrictions),
+            popularMusicVideos = ContentRestrictionPolicy.apply(state.popularMusicVideos, restrictions))
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PersonalizedUiState())
+    val autoMixes = combine(personalized, libraryPreferences.editedMixes, libraryPreferences.restrictions, settingsState) { state, edits, restrictions, settings ->
+        val saved = edits.filter { it.id.startsWith("${settings.activeSourceType.name}:") }
+        val generated = state.autoMixes.filterNot { mix -> saved.any { it.id == mix.id } }.map { mix ->
+            mix.copy(videos = ContentRestrictionPolicy.apply(mix.videos, restrictions))
+        }.filter { it.videos.size >= 3 }
+        saved + generated
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     private val remotePlaylist = MutableStateFlow<RemotePlaylistUiState?>(null)
     val remotePlaylistState = remotePlaylist.asStateFlow()
 
@@ -119,6 +139,9 @@ class HomeViewModel @Inject constructor(
     private val impressionsThisSession = mutableSetOf<String>()
 
     init {
+        viewModelScope.launch {
+            libraryPreferences.restrictions.drop(1).collect { recommendationRefresh.value++ }
+        }
         viewModelScope.launch {
             settingsRepository.settingsFlow
                 .distinctUntilChangedBy { it.activeSourceType }
@@ -266,7 +289,7 @@ class HomeViewModel @Inject constructor(
         if (mix.videos.none { it.id == video.id && it.sourceType == video.sourceType }) return
         viewModelScope.launch { personalizedRecommendations.recordClick(video) }
         playbackController.loadAndPlayVideo(video, mix.videos, mix.title,
-            openFullPlayer = true, radioMode = false, autoRadioAfterEnd = mix.isMusic, replaceQueue = true)
+            openFullPlayer = true, radioMode = false, autoRadioAfterEnd = mix.isMusic && !mix.isCustomized, replaceQueue = true)
     }
 
     fun addVideoToPlaylist(playlistId: Long, video: VideoItem) {
@@ -288,6 +311,13 @@ class HomeViewModel @Inject constructor(
                 RecommendationAction.BLOCK_CHANNEL -> personalizedRecommendations.blockChannel(video)
                 RecommendationAction.MARK_WATCHED -> personalizedRecommendations.markWatched(video)
                 RecommendationAction.WATCH_LATER -> playlistRepository.addToWatchLater(video)
+                RecommendationAction.RESTRICT -> {
+                    try {
+                        libraryPreferences.restrictVideo(video)
+                        notice.value = "Đã thêm vào danh sách hạn chế"
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { notice.value = "Chưa lưu được lựa chọn. Hãy thử lại." }
+                }
             }
             recommendationRefresh.value++
         }

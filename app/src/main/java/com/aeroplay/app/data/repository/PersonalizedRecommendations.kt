@@ -263,12 +263,15 @@ class PersonalizedRecommendations @Inject constructor(
         val feedback = dao.getRecommendationFeedback()
         val blocked = dao.getBlockedRecommendationChannels()
         val impressions = dao.getRecommendationImpressions()
+        val restrictions = dao.getContentRestrictions()
         val profile = RecommendationRanking.buildProfile(history, favorites, playlists, searches, feedback, blocked, impressions, now)
         fun allowed(video: VideoItem): Boolean =
             video.sourceType == source && RecommendationRanking.stableKey(video) !in profile.negativeInteractions &&
                 RecommendationRanking.normalize(video.channelName) !in profile.blockedChannels
-        val preferred = (favorites.map { it.toVideoItem() } + history.map { it.toVideoItem() } + playlists.map { it.toVideoItem() })
+        val savedVideos = (favorites.map { it.toVideoItem() } + history.map { it.toVideoItem() } + playlists.map { it.toVideoItem() })
             .filter(::allowed)
+        val savedSeedKeys = ContentRestrictionPolicy.preferredSeeds(savedVideos, restrictions)
+        val preferred = savedVideos.filter { RecommendationRanking.stableKey(it) in savedSeedKeys }
         if (source == ContentSourceType.EXPERIMENTAL_EXTRACTOR && !YouTubePolicyFeatureFlags.allowNewPipeYouTube) {
             val allowed = RecommendationRanking.rankForProfile(openMedia.getRecommendedVideos(), profile, now = now)
             return@withContext PersonalizedResult(
@@ -282,15 +285,17 @@ class PersonalizedRecommendations @Inject constructor(
         val sourceFavorites = favorites.filter {
             it.sourceTypeName == source.name || (source.isExperimental && it.sourceTypeName == ContentSourceType.DEVICE_LOCAL.name)
         }
-        val seeds = sourceHistory.map { RecommendationSeed(it.toVideoItem(), it.playCount, it.watchedAtEpochMs) } +
+        val candidateSeeds = sourceHistory.map { RecommendationSeed(it.toVideoItem(), it.playCount, it.watchedAtEpochMs) } +
             sourceFavorites.map { RecommendationSeed(it.toVideoItem(), 1, it.addedAtEpochMs) }
-        val musicSeed = (listOfNotNull(currentVideo?.takeIf { it.sourceType == source && (currentIsMusic ||
+        val preferredKeys = ContentRestrictionPolicy.preferredSeeds(candidateSeeds.map { it.video } + listOfNotNull(currentVideo), restrictions)
+        val seeds = candidateSeeds.filter { RecommendationRanking.stableKey(it.video) in preferredKeys }
+        val musicSeed = (listOfNotNull(currentVideo?.takeIf { RecommendationRanking.stableKey(it) in preferredKeys && it.sourceType == source && (currentIsMusic ||
             MusicStyleAnalyzer.analyze(it.title, it.channelName, currentDescription).isLikelyMusic) }) +
             seeds.sortedByDescending { RecommendationRanking.seedWeight(it, now) }.map { it.video })
             .firstOrNull { (currentIsMusic && it.id == currentVideo?.id) ||
                 MusicStyleAnalyzer.analyze(it.title, it.channelName,
                     if (it.id == currentVideo?.id) currentDescription else "").isLikelyMusic }
-            ?: currentVideo?.takeIf { it.sourceType == source && currentIsMusic }
+            ?: currentVideo?.takeIf { RecommendationRanking.stableKey(it) in preferredKeys && it.sourceType == source && currentIsMusic }
         val musicDescription = currentDescription.takeIf { musicSeed?.id == currentVideo?.id }.orEmpty()
         val inferredStyle = musicSeed?.let { MusicStyleAnalyzer.analyze(it.title, it.channelName, musicDescription) }
         val musicStyle = if (currentIsMusic && musicSeed?.id == currentVideo?.id && inferredStyle?.isLikelyMusic == false) {
@@ -329,7 +334,7 @@ class PersonalizedRecommendations @Inject constructor(
             emptyList(), "Xem video hoặc tìm chủ đề bạn thích để AeroPlay bắt đầu cá nhân hóa."
         )
         val topSeeds = seeds.sortedByDescending { RecommendationRanking.seedWeight(it, now) }
-            .let { ordered -> (listOfNotNull(currentVideo?.takeIf { it.sourceType == source }?.let { RecommendationSeed(it, 1, now) }) + ordered) }
+            .let { ordered -> (listOfNotNull(currentVideo?.takeIf { it.sourceType == source && RecommendationRanking.stableKey(it) in preferredKeys }?.let { RecommendationSeed(it, 1, now) }) + ordered) }
             .distinctBy { RecommendationRanking.stableKey(it.video) }.take(2)
         val key = (topSeeds.map { RecommendationRanking.stableKey(it.video) } + queries).joinToString("|")
         var pool = synchronized(cache) { cache[key]?.takeIf { now - it.at < CACHE_TTL_MS } }

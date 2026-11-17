@@ -6,5 +6,6 @@ data class AutoMix(
     val title: String,
     val subtitle: String,
     val videos: List<VideoItem>,
-    val isMusic: Boolean = true
+    val isMusic: Boolean = true,
+    val isCustomized: Boolean = false
 )

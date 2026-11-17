@@ -153,6 +153,25 @@ data class RecommendationFeedbackEntity(
     val updatedAtEpochMs: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "edited_mixes")
+data class EditedMixEntity(
+    @PrimaryKey val mixId: String,
+    val title: String,
+    val subtitle: String,
+    val isMusic: Boolean,
+    val videosJson: String,
+    val updatedAtEpochMs: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "content_restrictions")
+data class ContentRestrictionEntity(
+    @PrimaryKey val restrictionId: String,
+    val kind: String,
+    val label: String,
+    val videoJson: String,
+    val updatedAtEpochMs: Long = System.currentTimeMillis()
+)
+
 @Entity(tableName = "blocked_recommendation_channels")
 data class BlockedRecommendationChannelEntity(
     @PrimaryKey val normalizedChannelName: String,

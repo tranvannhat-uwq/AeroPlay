@@ -55,10 +55,14 @@ class AeroPlayDatabaseMigrationTest {
             'preserved-id', 'https://example.invalid/watch', 'Preserved title', 'Preserved channel',
             '', '', '', 120, 99, '2 days ago', 'EXPERIMENTAL_EXTRACTOR', 42, 120000, 123456789, 7)""")
         old.version = 2
+        old.execSQL("INSERT INTO favorites SELECT videoId,url,title,channelName,channelUrl,channelAvatarUrl,thumbnailUrl,durationSeconds,viewCount,uploadedText,sourceTypeName,123 FROM watch_history")
+        old.execSQL("INSERT INTO user_playlists VALUES(42,'Preserved playlist','Description',123)")
+        old.execSQL("INSERT INTO playlist_videos SELECT 42,videoId,url,title,channelName,channelUrl,channelAvatarUrl,thumbnailUrl,durationSeconds,viewCount,uploadedText,sourceTypeName,123 FROM watch_history")
+        old.execSQL("INSERT INTO playback_positions VALUES('preserved-id',42000,120000,123)")
         old.close()
 
         val migrated = Room.databaseBuilder(context, AeroPlayDatabase::class.java, name)
-            .addMigrations(DatabaseModule.MIGRATION_2_3, DatabaseModule.MIGRATION_3_4)
+            .addMigrations(DatabaseModule.MIGRATION_2_3, DatabaseModule.MIGRATION_3_4, DatabaseModule.MIGRATION_4_5)
             .build()
         try {
             val preserved = migrated.aeroPlayDao().observeWatchHistory().first().single()
@@ -67,6 +71,12 @@ class AeroPlayDatabaseMigrationTest {
             assertEquals(7, preserved.playCount)
             assertEquals(0L, preserved.totalWatchedMs)
             assertEquals(0, preserved.completedPlayCount)
+            assertEquals("preserved-id", migrated.aeroPlayDao().observeFavorites().first().single().videoId)
+            assertEquals("Preserved playlist", migrated.aeroPlayDao().observePlaylists().first().single().name)
+            assertEquals("preserved-id", migrated.aeroPlayDao().observePlaylistVideos(42).first().single().videoId)
+            assertEquals(42000L, migrated.aeroPlayDao().getPlaybackPosition("preserved-id")?.positionMs)
+            assertEquals(0, migrated.aeroPlayDao().observeEditedMixes().first().size)
+            assertEquals(0, migrated.aeroPlayDao().getContentRestrictions().size)
             val youtubeTables = migrated.openHelper.readableDatabase.query(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'youtube_%'"
             ).use { cursor -> buildSet { while (cursor.moveToNext()) add(cursor.getString(0)) } }

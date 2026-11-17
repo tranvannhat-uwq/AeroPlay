@@ -57,7 +57,7 @@ internal fun AutoMixCarousel(mixes: List<AutoMix>, onOpen: (AutoMix) -> Unit) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text(mix.title, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.titleSmall)
-                        Text("${mix.videos.size} ${if (mix.isMusic) "bài" else "video"} • Tự động kết hợp",
+                        Text("${mix.videos.size} ${if (mix.isMusic) "bài" else "video"} • ${if (mix.isCustomized) "Đã chỉnh sửa" else "Tự động kết hợp"}",
                             maxLines = 1, overflow = TextOverflow.Ellipsis,
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(mix.subtitle, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis,

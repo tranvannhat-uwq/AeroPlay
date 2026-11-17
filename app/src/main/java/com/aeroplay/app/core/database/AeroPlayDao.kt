@@ -9,6 +9,26 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface AeroPlayDao {
+    @Query("SELECT * FROM edited_mixes ORDER BY updatedAtEpochMs DESC")
+    fun observeEditedMixes(): Flow<List<EditedMixEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveEditedMix(mix: EditedMixEntity)
+
+    @Query("DELETE FROM edited_mixes WHERE mixId = :id")
+    suspend fun resetEditedMix(id: String)
+
+    @Query("SELECT * FROM content_restrictions ORDER BY updatedAtEpochMs DESC")
+    fun observeContentRestrictions(): Flow<List<ContentRestrictionEntity>>
+
+    @Query("SELECT * FROM content_restrictions ORDER BY updatedAtEpochMs DESC")
+    suspend fun getContentRestrictions(): List<ContentRestrictionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun saveContentRestriction(restriction: ContentRestrictionEntity)
+
+    @Query("DELETE FROM content_restrictions WHERE restrictionId = :id")
+    suspend fun removeContentRestriction(id: String)
 
     // --- Watch History ---
     @Query("SELECT * FROM watch_history ORDER BY watchedAtEpochMs DESC LIMIT 100")

@@ -86,6 +86,8 @@ fun SettingsScreen(
     var showOpenSourceLicenses by remember { mutableStateOf(false) }
     var showLimitationsModal by remember { mutableStateOf(false) }
     var showYouTubeAccount by remember { mutableStateOf(false) }
+    var showRestrictions by remember { mutableStateOf(false) }
+    if (showRestrictions) RestrictionsDialog(onDismiss = { showRestrictions = false })
     val authorizationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
@@ -336,6 +338,12 @@ fun SettingsScreen(
         }
 
         // 5. Storage & Privacy
+        item {
+            SettingsGroupCard(title = "Nội dung đề xuất") {
+                SettingsActionRow(icon = Icons.Filled.AutoAwesome, title = "Danh sách hạn chế",
+                    subtitle = "Quản lý video và phong cách bạn ít muốn xem", onClick = { showRestrictions = true })
+            }
+        }
         item {
             SettingsGroupCard(title = "Dữ liệu cục bộ & Bộ nhớ đệm") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

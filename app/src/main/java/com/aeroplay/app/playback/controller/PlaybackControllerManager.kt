@@ -98,6 +98,18 @@ class PlaybackControllerManager @Inject constructor(
     init {
         connectSession()
         observeSettings()
+        scope.launch {
+            musicSuggestionRepository.restrictionChanges.collectLatest {
+                val queue = playbackRepository.activeQueue.value
+                if (!queue.radioMode || queue.currentIndex < 0) return@collectLatest
+                val played = queue.items.take(queue.currentIndex + 1)
+                val pending = musicSuggestionRepository.filterPreferences(queue.items.drop(queue.currentIndex + 1))
+                if (playbackRepository.activeQueue.value !== queue) return@collectLatest
+                val updated = queue.copy(items = played + pending)
+                playbackRepository.updateQueue(updated)
+                _playbackState.update { it.copy(queue = updated) }
+            }
+        }
     }
 
     private fun connectSession() {
@@ -340,7 +352,8 @@ class PlaybackControllerManager @Inject constructor(
         openFullPlayer: Boolean = true,
         radioMode: Boolean = false,
         autoRadioAfterEnd: Boolean = false,
-        replaceQueue: Boolean = false
+        replaceQueue: Boolean = false,
+        startFromBeginning: Boolean = false
     ) {
         if (carAudioOverride) {
             // A phone selection takes over the same player; don't let old car events replace its UI state.
@@ -373,9 +386,10 @@ class PlaybackControllerManager @Inject constructor(
                 radioRecommendationJob?.cancel()
                 val items = if (queueItems.any { it.id == video.id && it.sourceType == video.sourceType }) queueItems else listOf(video) + queueItems
                 val queue = PlaybackQueue(items, items.indexOfFirst { it.id == video.id }.coerceAtLeast(0),
-                    queueTitle, radioMode, autoRadioAfterEnd)
+                    queueTitle, radioMode, autoRadioAfterEnd, startFromBeginning)
                 playbackRepository.updateQueue(queue)
                 _playbackState.update { it.copy(queue = queue) }
+                if (startFromBeginning) mediaController?.seekTo(0L)
                 mediaController?.play()
             }
             // Requirement V.3: Do not open duplicate players for the same active content
@@ -420,7 +434,8 @@ class PlaybackControllerManager @Inject constructor(
             currentIndex = idx,
             queueTitle = queueTitle,
             radioMode = radioMode,
-            autoRadioAfterEnd = autoRadioAfterEnd
+            autoRadioAfterEnd = autoRadioAfterEnd,
+            startFromBeginning = startFromBeginning
         )
         playbackRepository.updateQueue(queue)
 
@@ -439,7 +454,7 @@ class PlaybackControllerManager @Inject constructor(
 
         extractionJob = scope.launch {
             val settings = settingsRepository.getSettingsSnapshot()
-            val savedPosition = historyRepository.getSavedPosition(video.id)?.positionMs ?: 0L
+            val savedPosition = if (startFromBeginning) 0L else historyRepository.getSavedPosition(video.id)?.positionMs ?: 0L
 
             val detailResult = metadataRepository.getVideoDetail(
                 videoIdOrUrl = video.url.ifBlank { video.id },
@@ -491,12 +506,12 @@ class PlaybackControllerManager @Inject constructor(
                                 queueBeforeRecommendations.currentItem?.id == updatedVideo.id
                             ) {
                                 val recentAndPending = queueBeforeRecommendations.items
-                                val fresh = MusicRecommendationRanker.rank(
+                                val fresh = musicSuggestionRepository.filterPreferences(MusicRecommendationRanker.rank(
                                     detail.relatedVideos,
                                     updatedVideo,
                                     currentDescription = detail.description,
                                     forceMusic = true
-                                )
+                                ))
                                     .filterNot { suggestion ->
                                         recentAndPending.any { existing ->
                                             com.aeroplay.app.data.repository.SongIdentityResolver.likelySameSong(
@@ -650,7 +665,8 @@ class PlaybackControllerManager @Inject constructor(
             queueTitle = queue.queueTitle,
             openFullPlayer = fullOpen,
             radioMode = queue.radioMode,
-            autoRadioAfterEnd = queue.autoRadioAfterEnd
+            autoRadioAfterEnd = queue.autoRadioAfterEnd,
+            startFromBeginning = queue.startFromBeginning
         )
     }
 
@@ -778,7 +794,8 @@ class PlaybackControllerManager @Inject constructor(
             queueTitle = updatedQueue.queueTitle,
             openFullPlayer = _playbackState.value.isFullPlayerOpen,
             radioMode = updatedQueue.radioMode,
-            autoRadioAfterEnd = updatedQueue.autoRadioAfterEnd
+            autoRadioAfterEnd = updatedQueue.autoRadioAfterEnd,
+            startFromBeginning = updatedQueue.startFromBeginning
         )
     }
 
@@ -800,7 +817,8 @@ class PlaybackControllerManager @Inject constructor(
             queueTitle = updatedQueue.queueTitle,
             openFullPlayer = _playbackState.value.isFullPlayerOpen,
             radioMode = updatedQueue.radioMode,
-            autoRadioAfterEnd = updatedQueue.autoRadioAfterEnd
+            autoRadioAfterEnd = updatedQueue.autoRadioAfterEnd,
+            startFromBeginning = updatedQueue.startFromBeginning
         )
     }
 

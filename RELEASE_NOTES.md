@@ -1,3 +1,11 @@
+AeroPlay 2.2.0
+
+- Thêm Phát ngẫu nhiên cho Lịch sử xem, Trên thiết bị, Yêu thích, toàn bộ playlist đang lọc và từng playlist. Hàng đợi loại mục trùng, cố gắng giãn kênh, tránh lặp ngay bài hiện tại và phát từ đầu.
+- Thu gọn Trang chủ với nút chọn nguồn dạng biểu tượng.
+- Cho phép sửa bản phối, tìm và thêm bài/video, xóa mục, lưu danh sách đã sửa qua lần mở lại ứng dụng.
+- Bổ sung Danh sách hạn chế tại Cài đặt và thao tác hạn chế từ Trang chủ, tìm kiếm, trình phát và bản phối. Video đã chọn được ẩn khỏi gợi ý, nội dung cùng phong cách/chủ đề được giảm tần suất.
+- Nâng Room từ 4 lên 5 bằng migration bổ sung bảng. Các bảng lịch sử, yêu thích, playlist, vị trí phát và video thiết bị được giữ qua migration.
+
 AeroPlay 2.1.0
 
 - Thay icon launcher và logo ngang bằng bộ hình ảnh AeroPlay do người dùng cung cấp; cập nhật splash Android 12+, themed icon Android 13+ và icon thông báo media.

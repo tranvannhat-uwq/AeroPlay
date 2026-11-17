@@ -91,6 +91,14 @@ fun SearchScreen(
     val playlists by viewModel.userPlaylists.collectAsStateWithLifecycle()
     val remotePlaylist by viewModel.remotePlaylistState.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
+    val restrictionNotice by viewModel.restrictionNotice.collectAsStateWithLifecycle()
+    val noticeContext = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(restrictionNotice) {
+        restrictionNotice?.let {
+            android.widget.Toast.makeText(noticeContext, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearRestrictionNotice()
+        }
+    }
 
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
 
@@ -386,6 +394,7 @@ fun SearchScreen(
                                     isFavorite = video.id in favoriteIds,
                                     onClick = { viewModel.playVideo(video) },
                                     onToggleFavorite = { viewModel.toggleFavorite(video) },
+                                    onRestrict = { viewModel.restrictVideo(video) },
                                     onAddToPlaylist = { playlistTargetVideo = video }
                                 )
                             }
@@ -460,6 +469,7 @@ private fun SearchVideoResultRow(
     isFavorite: Boolean,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onRestrict: () -> Unit,
     onAddToPlaylist: () -> Unit
 ) {
     var menuOpen by remember(video.id) { mutableStateOf(false) }
@@ -500,6 +510,8 @@ private fun SearchVideoResultRow(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(text = { Text("Hạn chế gợi ý tương tự") },
+                        onClick = { menuOpen = false; onRestrict() })
                     DropdownMenuItem(text = { Text(if (isFavorite) "Bỏ yêu thích" else "Yêu thích") },
                         leadingIcon = { Icon(if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                             contentDescription = null) },

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -253,6 +254,29 @@ fun LibraryScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         val trimmedFilter = searchQuery.trim()
+
+        val shuffleVideos = when (selectedTab) {
+            LibraryTab.HISTORY -> history
+            LibraryTab.DEVICE -> deviceVideos
+            LibraryTab.FAVORITES -> favorites
+            LibraryTab.PLAYLISTS -> selectedPlaylistVideos
+        }.filter { trimmedFilter.isEmpty() || it.title.contains(trimmedFilter, true) || it.channelName.contains(trimmedFilter, true) }
+        val visiblePlaylists = playlists.filter { trimmedFilter.isEmpty() || it.name.contains(trimmedFilter, true) }
+        val shuffleEnabled = if (selectedTab == LibraryTab.PLAYLISTS && selectedPlaylistId == null)
+            visiblePlaylists.any { it.videoCount > 0 } else shuffleVideos.isNotEmpty()
+        TextButton(
+            modifier = Modifier.padding(horizontal = 16.dp), enabled = shuffleEnabled,
+            onClick = {
+                if (selectedTab == LibraryTab.PLAYLISTS && selectedPlaylistId == null) viewModel.shufflePlaylists(visiblePlaylists)
+                else if (selectedPlaylistId != null) viewModel.shufflePlaylist(requireNotNull(selectedPlaylistId), trimmedFilter)
+                else viewModel.shuffle(shuffleVideos,
+                    if (selectedPlaylistId != null) playlists.firstOrNull { it.id == selectedPlaylistId }?.name.orEmpty() else selectedTab.label)
+            }
+        ) {
+            Icon(Icons.Filled.Shuffle, contentDescription = null)
+            Spacer(Modifier.width(8.dp))
+            Text("Phát ngẫu nhiên")
+        }
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),

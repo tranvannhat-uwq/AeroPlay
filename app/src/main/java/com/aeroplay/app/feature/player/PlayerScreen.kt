@@ -121,6 +121,7 @@ import com.aeroplay.app.core.designsystem.GlassBackground
 import com.aeroplay.app.core.designsystem.GlassSurface
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.designsystem.AeroPlayBrand
+import androidx.compose.material.icons.filled.Block
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.core.model.StreamVariant
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
@@ -139,6 +140,13 @@ fun FullPlayerOverlay(
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val statusColors = LocalAeroPlayStatusColors.current
     val context = LocalContext.current
+    val restrictionNotice by viewModel.restrictionNotice.collectAsStateWithLifecycle()
+    LaunchedEffect(restrictionNotice) {
+        restrictionNotice?.let {
+            android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearRestrictionNotice()
+        }
+    }
     val activity = context as? Activity
 
     val currentVideo = state.currentVideo ?: return
@@ -742,6 +750,9 @@ fun FullPlayerOverlay(
                                 activeColor = if (state.isAudioOnlyMode) statusColors.audioModeActive else null,
                                 onClick = { viewModel.setAudioOnlyMode(!state.isAudioOnlyMode) }
                             )
+
+                            PlayerActionChip(icon = Icons.Filled.Block, label = "Hạn chế gợi ý tương tự",
+                                onClick = viewModel::restrictCurrentVideo)
 
                             PlayerActionChip(
                                 icon = Icons.Filled.HighQuality,

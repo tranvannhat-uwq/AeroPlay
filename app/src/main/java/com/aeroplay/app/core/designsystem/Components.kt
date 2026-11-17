@@ -279,7 +279,7 @@ fun VideoFeedCard(
                         Text(
                             text = when (video.sourceType) {
                                 ContentSourceType.DEVICE_LOCAL -> "Trên thiết bị"
-                                ContentSourceType.EXPERIMENTAL_EXTRACTOR -> "Extractor"
+                                ContentSourceType.EXPERIMENTAL_EXTRACTOR -> "YouTube"
                                 ContentSourceType.DEMO_LOCAL -> "Open HD"
                             },
                             style = MaterialTheme.typography.bodySmall,

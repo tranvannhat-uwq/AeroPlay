@@ -17,7 +17,17 @@
 
 Bấm thẻ để xem nội dung, chọn một bài hoặc **Phát bản phối**. Hàng đợi là snapshot của danh sách vừa mở, không thay đổi trong lúc đang nghe khi gợi ý Trang chủ cập nhật. Nếu bài chọn đang phát/tạm dừng, thay hàng đợi và tiếp tục cùng player thay vì bỏ qua danh sách hoặc khởi tạo player thứ hai.
 
-Các bản phối nhạc dùng cơ chế tiếp tục radio sau cuối danh sách khi cài đặt tự phát bài tương tự cho phép. Chuẩn Mở phát danh sách hữu hạn. Đây là các danh sách sinh động trong ứng dụng, không tự tạo hàng loạt playlist Room, không ghi playlist lên YouTube; schema và dữ liệu hiện có không thay đổi.
+Các bản phối nhạc tự động dùng cơ chế tiếp tục radio sau cuối danh sách khi cài đặt tự phát bài tương tự cho phép. Chuẩn Mở phát danh sách hữu hạn. Không ghi playlist lên YouTube.
+
+Từ 2.2.0, chọn **Sửa bản phối** để xóa mục hoặc tìm/thêm bài và video từ thư viện hay nguồn hiện tại. **Lưu thay đổi** lưu riêng danh sách đã sửa và giữ nguyên qua lần khởi động sau. **Hủy sửa** bỏ bản nháp. Bản phối đã sửa phát danh sách hữu hạn; sửa trong lúc nghe có hiệu lực ở lần mở/phát bản phối kế tiếp, không tự thay hàng đợi đang nghe.
+
+Room nâng từ phiên bản 4 lên 5 bằng migration chỉ thêm hai bảng bản phối đã sửa và danh sách hạn chế. Các bảng lịch sử, yêu thích, playlist và vị trí phát cũ được giữ lại.
+
+## Phát ngẫu nhiên và hạn chế
+
+- Thư viện có **Phát ngẫu nhiên** trong Lịch sử xem, Trên thiết bị, Yêu thích, tập hợp playlist và từng playlist. Tôn trọng bộ lọc đang nhập, loại mục trùng, cố gắng giãn các bài cùng kênh và tránh bắt đầu bằng bài đang phát. Ưu tiên nội dung hữu hạn; nếu chỉ có livestream thì dùng các livestream đó. Bắt đầu bài từ đầu, giữ thứ tự hàng đợi khi chuyển bài và dừng ở cuối danh sách.
+- Chọn **Hạn chế gợi ý tương tự** trong menu video ở Trang chủ, Tìm kiếm, trình phát hoặc bản phối. Quản lý/gỡ video và thêm/gỡ phong cách tại **Cài đặt → Danh sách hạn chế**.
+- Video bị hạn chế được bỏ khỏi đề xuất. Nội dung tương tự theo tiêu đề, kênh và thể loại suy luận được giảm tỷ lệ và ưu tiên thấp hơn; không phân tích âm thanh. Áp dụng cho Trang chủ, bản phối tự động và gợi ý/phát tiếp. Các lựa chọn phát trực tiếp, thư viện và bản phối do người dùng sửa vẫn được giữ nguyên.
 
 ## Tải và lỗi
 
@@ -31,4 +41,11 @@ Hai cờ tài khoản/API-only tiếp tục tắt. Các luồng chính thức b�
 - `AutoMixDeviceTest`: kiểm tra mở thẻ, chọn lại clip có sẵn và thay hàng đợi/resume trên player thực; kiểm tra nguồn YouTube trực tiếp cần tham số instrumentation `liveMix=true`.
 - `BrandVisualAuditTest`: ảnh Trang chủ và các màn hình sáng/tối trên API 35.
 
-Trạng thái phát hành: demo cục bộ trước khi cập nhật. Kết quả kiểm thử thực tế được ghi trong `BRAND_REFRESH_AUDIT.md`; không coi build thành công là bằng chứng phát nhạc YouTube hoặc chạy trên điện thoại/đầu xe thật.
+### Kiểm tra bản 2.2.0 — 17/11/2026
+
+- Build Debug/Release và lint thành công (lint: 0 lỗi, 111 cảnh báo; một số bộ kiểm tra lint Navigation của thư viện cũ bị bỏ qua).
+- Unit tests: 65 đạt, 3 bỏ qua, 0 lỗi. Instrumentation trên API 35: 16 đạt, gồm migration, lưu/đọc lại tùy chỉnh, thao tác shuffle ở 5 vị trí, sửa bản phối, quản lý hạn chế, tìm kiếm, điều hướng, toàn màn hình, Android Auto MediaBrowser, MEDIA_PLAY_FROM_SEARCH, tài nguyên/giao diện sáng-tối và phát nền/tắt màn hình bằng clip thật đi kèm ứng dụng.
+- APK Release 2.2.0/build 15 được xác minh package và chứng thư ký. Cài đè từ APK công khai 2.1.0 thành công; playlist tạo trước khi nâng cấp vẫn còn và nút shuffle mới xuất hiện.
+- APK 2.2.0 được phân phối qua GitHub Releases kèm manifest cập nhật và checksum. Chưa kiểm thử bản này trên điện thoại/đầu xe thật hoặc xác nhận phát YouTube trực tiếp; các kiểm thử playback trong lượt này dùng media đi kèm ứng dụng.
+
+Kết quả kiểm thử các bản trước được ghi trong `BRAND_REFRESH_AUDIT.md`; không coi build thành công là bằng chứng phát nhạc YouTube hoặc chạy trên điện thoại/đầu xe thật.

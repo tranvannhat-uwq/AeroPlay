@@ -151,7 +151,8 @@ data class PlaybackQueue(
     val currentIndex: Int = -1,
     val queueTitle: String = "Danh sách phát",
     val radioMode: Boolean = false,
-    val autoRadioAfterEnd: Boolean = false
+    val autoRadioAfterEnd: Boolean = false,
+    val startFromBeginning: Boolean = false
 ) {
     val currentItem: VideoItem?
         get() = items.getOrNull(currentIndex)

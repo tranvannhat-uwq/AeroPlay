@@ -11,9 +11,12 @@ import com.aeroplay.app.data.repository.PlaylistRepository
 import com.aeroplay.app.data.repository.MusicStyleAnalyzer
 import com.aeroplay.app.data.repository.DeviceMediaRepository
 import com.aeroplay.app.data.repository.SettingsRepository
+import com.aeroplay.app.data.repository.SmartShufflePlanner
+import kotlinx.coroutines.flow.first
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +44,7 @@ class LibraryViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val playbackController: PlaybackControllerManager
 ) : ViewModel() {
+    private var shuffleLoadJob: Job? = null
 
     private val _selectedTab = MutableStateFlow(LibraryTab.HISTORY)
     val selectedTab: StateFlow<LibraryTab> = _selectedTab.asStateFlow()
@@ -96,6 +100,7 @@ class LibraryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun selectTab(tab: LibraryTab) {
+        shuffleLoadJob?.cancel()
         _selectedTab.value = tab
         if (tab != LibraryTab.PLAYLISTS) {
             _selectedPlaylistId.value = null
@@ -107,6 +112,7 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun openPlaylistDetail(playlistId: Long?) {
+        shuffleLoadJob?.cancel()
         _selectedPlaylistId.value = playlistId
     }
 
@@ -158,6 +164,7 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun playVideo(video: VideoItem, list: List<VideoItem>, title: String) {
+        shuffleLoadJob?.cancel()
         val sample = list.take(8)
         val musicCount = sample.count {
             MusicStyleAnalyzer.analyze(it.title, it.channelName).isLikelyMusic
@@ -170,5 +177,36 @@ class LibraryViewModel @Inject constructor(
             openFullPlayer = true,
             autoRadioAfterEnd = continueWithMusic
         )
+    }
+
+    fun shuffle(list: List<VideoItem>, title: String) {
+        shuffleLoadJob?.cancel()
+        startShuffled(list, title)
+    }
+
+    private fun startShuffled(list: List<VideoItem>, title: String) {
+        val queue = SmartShufflePlanner.plan(list, playbackController.playbackState.value.currentVideo)
+        val first = queue.firstOrNull() ?: return
+        playbackController.loadAndPlayVideo(first, queue, "Ngẫu nhiên • $title",
+            openFullPlayer = true, replaceQueue = true, startFromBeginning = true)
+    }
+
+    fun shufflePlaylists(visible: List<UserPlaylist>) {
+        shuffleLoadJob?.cancel()
+        shuffleLoadJob = viewModelScope.launch {
+            val videos = visible.flatMap { playlistRepository.observePlaylistVideos(it.id).first() }
+            startShuffled(videos, "Danh sách phát")
+        }
+    }
+
+    fun shufflePlaylist(id: Long, query: String) {
+        shuffleLoadJob?.cancel()
+        shuffleLoadJob = viewModelScope.launch {
+            val videos = playlistRepository.observePlaylistVideos(id).first().filter {
+                query.isBlank() || it.title.contains(query, true) || it.channelName.contains(query, true)
+            }
+            val title = playlists.value.firstOrNull { it.id == id }?.name ?: "Danh sách phát"
+            startShuffled(videos, title)
+        }
     }
 }

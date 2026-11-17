@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -25,10 +29,28 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     private val playbackController: PlaybackControllerManager,
     private val historyRepository: HistoryRepository,
-    private val playlistRepository: PlaylistRepository
+    private val playlistRepository: PlaylistRepository,
+    private val libraryPreferences: com.aeroplay.app.data.repository.LibraryPreferencesRepository
 ) : ViewModel() {
+    private val notice = MutableStateFlow<String?>(null)
+    val restrictionNotice = notice.asStateFlow()
+    fun clearRestrictionNotice() { notice.value = null }
 
-    val playbackState: StateFlow<PlaybackState> = playbackController.playbackState
+    val playbackState = combine(playbackController.playbackState, libraryPreferences.restrictions) { state, restrictions ->
+        state.copy(currentDetail = state.currentDetail?.let { detail ->
+            detail.copy(relatedVideos = com.aeroplay.app.data.repository.ContentRestrictionPolicy.apply(detail.relatedVideos, restrictions))
+        })
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), playbackController.playbackState.value)
+    fun restrictCurrentVideo() {
+        val video = playbackState.value.currentVideo ?: return
+        viewModelScope.launch {
+            try {
+                libraryPreferences.restrictVideo(video)
+                notice.value = "Đã thêm vào danh sách hạn chế"
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { notice.value = "Chưa lưu được lựa chọn. Hãy thử lại." }
+        }
+    }
     val playerFlow: StateFlow<Player?> = playbackController.playerFlow
 
     val isCurrentFavorite: StateFlow<Boolean> = playbackState

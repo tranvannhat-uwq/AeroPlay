@@ -226,6 +226,17 @@ class MusicSuggestionRepository @Inject constructor(
     private val extractorSource: ExperimentalExtractorSource,
     private val dao: AeroPlayDao
 ) {
+    val restrictionChanges = dao.observeContentRestrictions()
+
+    suspend fun filterPreferences(videos: List<VideoItem>): List<VideoItem> {
+        val excluded = dao.getRecommendationFeedback().filter {
+            it.feedbackType == RecommendationRanking.NOT_INTERESTED || it.feedbackType == RecommendationRanking.MARKED_WATCHED
+        }.map { it.videoId }.toSet()
+        val blocked = dao.getBlockedRecommendationChannels().map { it.normalizedChannelName }.toSet()
+        return ContentRestrictionPolicy.apply(videos.filterNot {
+            RecommendationRanking.stableKey(it) in excluded || RecommendationRanking.normalize(it.channelName) in blocked
+        }, dao.getContentRestrictions())
+    }
     private data class Cached(val createdAt: Long, val videos: List<VideoItem>)
 
     private val cache = LinkedHashMap<String, Cached>()
@@ -252,7 +263,7 @@ class MusicSuggestionRepository @Inject constructor(
         } else related
         val relatedRanked = MusicRecommendationRanker.rank(
             permittedRelated, current, limit, description, forceMusic = true
-        ).filter(::isAllowed)
+        ).filter(::isAllowed).let { filterPreferences(it) }
         if (YouTubePolicyFeatureFlags.apiOnlyMode) return relatedRanked
         if (!current.sourceType.isExperimental || relatedRanked.size >= 12) {
             return relatedRanked
@@ -269,6 +280,7 @@ class MusicSuggestionRepository @Inject constructor(
             .distinctBy { "${it.sourceType}:${it.id}" }
             .let { MusicRecommendationRanker.rank(it, current, limit, description, forceMusic = true) }
             .filter(::isAllowed)
+            .let { filterPreferences(it) }
 
         val searched = withTimeoutOrNull(12_000L) {
             extractorSource.search(query).getOrNull()?.videos.orEmpty()
@@ -280,7 +292,7 @@ class MusicSuggestionRepository @Inject constructor(
             cache[key] = Cached(now, ranked)
             while (cache.size > MAX_CACHE_ENTRIES) cache.remove(cache.keys.first())
         }
-        return ranked.filter(::isAllowed)
+        return filterPreferences(ranked.filter(::isAllowed))
     }
 
     private companion object {
