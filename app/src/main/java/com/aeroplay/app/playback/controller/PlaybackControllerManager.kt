@@ -32,6 +32,7 @@ import com.aeroplay.app.data.repository.StreamResolver
 import com.aeroplay.app.data.repository.VideoMetadataRepository
 import com.aeroplay.app.data.source.SourceErrorException
 import com.aeroplay.app.playback.service.AeroPlayMediaService
+import com.aeroplay.app.playback.car.CarMediaLibrary
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.Futures
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -73,6 +74,8 @@ class PlaybackControllerManager @Inject constructor(
     private var mediaController: MediaController? = null
 
     private val _playerFlow = MutableStateFlow<Player?>(null)
+    private var carAudioOverride = false
+    private var audioOnlyBeforeCar = false
     val playerFlow: StateFlow<Player?> = _playerFlow.asStateFlow()
 
     private val _playbackState = MutableStateFlow(PlaybackState())
@@ -126,6 +129,7 @@ class PlaybackControllerManager @Inject constructor(
         mediaController = controller
         _playerFlow.value = controller
         attachPlayerListener(controller)
+        synchronizeCarPlayback(controller)
         startProgressTicker()
         SourceDiagnostics.event("session.connected", "ready=true")
     }
@@ -150,6 +154,9 @@ class PlaybackControllerManager @Inject constructor(
 
     private fun attachPlayerListener(controller: MediaController) {
         controller.addListener(object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                synchronizeCarPlayback(controller)
+            }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 _playbackState.update {
                     it.copy(
@@ -158,6 +165,7 @@ class PlaybackControllerManager @Inject constructor(
                         durationMs = controller.duration.coerceAtLeast(0L)
                     )
                 }
+                if (CarMediaLibrary.summary(controller.currentMediaItem) != null) return
                 if (!isPlaying) {
                     _playbackState.value.currentVideo?.let { video ->
                         flushWatchedDuration(video.id, controller.duration.coerceAtLeast(0L), controller.currentPosition.coerceAtLeast(0L))
@@ -193,6 +201,7 @@ class PlaybackControllerManager @Inject constructor(
                 }
 
                 if (playbackState == Player.STATE_ENDED) {
+                    if (CarMediaLibrary.summary(controller.currentMediaItem) != null) return
                     persistCurrentPosition()
                     val video = _playbackState.value.currentVideo
                     val durationMs = controller.duration.takeIf { it > 0L }
@@ -313,6 +322,14 @@ class PlaybackControllerManager @Inject constructor(
         radioMode: Boolean = false,
         autoRadioAfterEnd: Boolean = false
     ) {
+        if (carAudioOverride) {
+            // A phone selection takes over the same player; don't let old car events replace its UI state.
+            val restoreAudioOnly = audioOnlyBeforeCar
+            mediaController?.pause()
+            mediaController?.clearMediaItems()
+            carAudioOverride = false
+            _playbackState.update { it.copy(isAudioOnlyMode = restoreAudioOnly) }
+        }
         if (YouTubePolicyFeatureFlags.apiOnlyMode && YouTubePolicyFeatureFlags.isYouTubeVideo(video)) {
             mediaController?.pause()
             if (com.aeroplay.app.feature.player.YouTubePlayerActivity.open(context, video.url)) return
@@ -719,6 +736,10 @@ class PlaybackControllerManager @Inject constructor(
     }
 
     fun playNext() {
+        mediaController?.takeIf { CarMediaLibrary.summary(it.currentMediaItem) != null }?.let {
+            it.seekToNextMediaItem()
+            return
+        }
         val nextVideo = playbackRepository.nextInQueue() ?: return
         val updatedQueue = playbackRepository.activeQueue.value
         loadAndPlayVideo(
@@ -733,6 +754,10 @@ class PlaybackControllerManager @Inject constructor(
 
     fun playPrevious() {
         val controller = mediaController
+        if (controller != null && CarMediaLibrary.summary(controller.currentMediaItem) != null) {
+            controller.seekToPrevious()
+            return
+        }
         if (controller != null && controller.currentPosition > 5_000L) {
             seekTo(0L)
             return
@@ -871,6 +896,36 @@ class PlaybackControllerManager @Inject constructor(
             scope.launch {
                 historyRepository.updatePositionOnly(video.id, pos, dur)
             }
+        }
+    }
+
+    /** Android Auto and the phone share this session; don't start a second playback or a phone radio queue. */
+    private fun synchronizeCarPlayback(controller: MediaController) {
+        val video = CarMediaLibrary.summary(controller.currentMediaItem) ?: return
+        val old = _playbackState.value
+        if (!carAudioOverride) {
+            audioOnlyBeforeCar = old.isAudioOnlyMode
+            carAudioOverride = true
+        }
+        val changed = old.currentVideo?.id != video.id || old.currentVideo?.sourceType != video.sourceType
+        if (changed) {
+            old.currentVideo?.let { flushWatchedDuration(it.id, old.durationMs, old.currentPositionMs) }
+            extractionJob?.cancel()
+            radioRecommendationJob?.cancel()
+            currentStreamSelection = null
+            pendingWatchedMs = 0
+            sessionWatchedMs = 0
+        }
+        val items = (0 until controller.mediaItemCount).mapNotNull { CarMediaLibrary.summary(controller.getMediaItemAt(it)) }
+        val queue = PlaybackQueue(items, controller.currentMediaItemIndex, "Android Auto")
+        playbackRepository.updateQueue(queue)
+        _playbackState.update {
+            it.copy(currentVideo = video, currentDetail = null, queue = queue, isAudioOnlyMode = true,
+                isLoadingMetadata = false, isPlaying = controller.isPlaying,
+                isBuffering = controller.playbackState == Player.STATE_BUFFERING,
+                isFullPlayerOpen = if (changed) false else it.isFullPlayerOpen,
+                isMiniPlayerVisible = if (changed) true else it.isMiniPlayerVisible,
+                error = if (changed) null else it.error)
         }
     }
 }

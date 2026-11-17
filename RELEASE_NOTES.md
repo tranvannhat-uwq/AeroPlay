@@ -1,3 +1,12 @@
+AeroPlay 2.0.6
+
+- Bổ sung tích hợp Android Auto dạng ứng dụng âm thanh: duyệt Yêu thích, Nghe gần đây, Playlist, Trên thiết bị và Khám phá nhạc.
+- Thêm tìm kiếm qua MediaBrowser, phát/tiếp tục bài từ xe và hàng đợi chuyển bài. Xe và điện thoại dùng chung MediaLibrarySession/ExoPlayer; tắt track video khi phát mục được chọn từ xe.
+- Không tự đặt làm ứng dụng nhạc mặc định. APK cài từ GitHub có thể cần tùy chọn Unknown sources trong chế độ nhà phát triển Android Auto; xem ANDROID_AUTO_SETUP.md.
+- Chưa thử trên điện thoại/đầu xe thật hoặc Desktop Head Unit; không coi build thành công là xác nhận tương thích xe.
+
+Cài đè để giữ dữ liệu. Google/YouTube API tiếp tục tắt; màn hình điện thoại vẫn dùng giao diện hiện tại.
+
 AeroPlay 2.0.5
 
 - Giữ màn hình sáng khi xem video trong trình phát đầy đủ (dọc/ngang), kể cả lúc chờ tải tiếp, để tránh tự tắt theo timeout của điện thoại.

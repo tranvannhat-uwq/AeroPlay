@@ -6,8 +6,11 @@
 - [Cập nhật trực tiếp trong ứng dụng và cách phát hành bản mới](GITHUB_RELEASES.md)
 - [Nguồn và ghi công tài nguyên media](OPEN_MEDIA_ASSETS.md)
 - [Cấu hình Google OAuth để bật tài khoản YouTube chỉ đọc](GOOGLE_OAUTH_SETUP.md)
+- [Cài đặt và kiểm thử Android Auto](ANDROID_AUTO_SETUP.md)
 
 ## Tính năng
+
+- Android Auto: thư viện âm thanh, điều khiển media và tìm kiếm qua MediaLibraryService; bản 2.0.6 cần kiểm thử trên đầu xe thật, xem hướng dẫn ở trên.
 
 - Giao diện Liquid Glass sáng, vuốt thu video thành cửa sổ nổi và vuốt lên để mở rộng.
 - Trình phát ngang ẩn thanh hệ thống; nút điều khiển tự ẩn sau 4 giây.

@@ -20,11 +20,22 @@ import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaSessionService
+import androidx.media3.session.MediaLibraryService
+import androidx.media3.session.MediaLibraryService.MediaLibrarySession
+import androidx.media3.session.LibraryResult
+import androidx.media3.session.SessionError
+import androidx.media3.session.MediaLibraryService.LibraryParams
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.aeroplay.app.MainActivity
 import com.aeroplay.app.core.network.SourceDiagnostics
+import com.aeroplay.app.playback.car.CarMediaLibrary
+import com.aeroplay.app.playback.car.CarBrowseIds
+import com.aeroplay.app.core.model.VideoItem
+import com.aeroplay.app.data.repository.HistoryRepository
+import com.google.common.collect.ImmutableList
+import kotlinx.coroutines.*
+import kotlinx.coroutines.guava.future
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.AndroidEntryPoint
@@ -32,12 +43,12 @@ import okhttp3.OkHttpClient
 import javax.inject.Inject
 
 /**
- * Unified MediaSessionService powering foreground video playback, background audio playback,
- * lock-screen controls, and Bluetooth headset controls (Section V.6 & VI).
+ * One MediaLibrarySession powers phone playback, Android Auto's audio library,
+ * lock-screen controls and Bluetooth headset controls.
  */
 @AndroidEntryPoint
 @OptIn(UnstableApi::class)
-class AeroPlayMediaService : MediaSessionService() {
+class AeroPlayMediaService : MediaLibraryService() {
 
     companion object {
         const val EXTRA_SECONDARY_AUDIO_URL = "com.aeroplay.app.EXTRA_SECONDARY_AUDIO_URL"
@@ -49,9 +60,17 @@ class AeroPlayMediaService : MediaSessionService() {
 
     @Inject
     lateinit var okHttpClient: OkHttpClient
+    @Inject lateinit var carLibrary: CarMediaLibrary
+    @Inject lateinit var historyRepository: HistoryRepository
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var carGeneration = 0L
+    private val remainingCarTracks = ArrayDeque<VideoItem>()
+    private var prefetchJob: Job? = null
+    private var carProgressJob: Job? = null
 
     private var player: ExoPlayer? = null
-    private var mediaSession: MediaSession? = null
+    private var mediaSession: MediaLibrarySession? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -110,6 +129,39 @@ class AeroPlayMediaService : MediaSessionService() {
             .build()
 
         exoPlayer.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                val video = CarMediaLibrary.summary(exoPlayer.currentMediaItem) ?: return
+                if (!isPlaying && exoPlayer.duration > 0) serviceScope.launch {
+                    historyRepository.updatePositionOnly(video.id, exoPlayer.currentPosition, exoPlayer.duration)
+                }
+            }
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val carVideo = CarMediaLibrary.summary(mediaItem)
+                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, carVideo != null).build()
+                carProgressJob?.cancel()
+                if (carVideo != null) {
+                    carProgressJob = serviceScope.launch {
+                        var recorded = false
+                        while (isActive) {
+                            if (exoPlayer.isPlaying) {
+                                val duration = exoPlayer.duration.coerceAtLeast(0L)
+                                if (!recorded) {
+                                    historyRepository.recordWatchAndPosition(carVideo, exoPlayer.currentPosition, duration)
+                                    recorded = true
+                                } else historyRepository.updatePositionOnly(carVideo.id, exoPlayer.currentPosition, duration)
+                            }
+                            delay(5_000)
+                        }
+                    }
+                    prefetchNextCarTrack()
+                } else {
+                    carGeneration++
+                    remainingCarTracks.clear()
+                    prefetchJob?.cancel()
+                }
+            }
+
             override fun onRenderedFirstFrame() {
                 SourceDiagnostics.event("player.rendered", "firstFrame=true")
             }
@@ -131,16 +183,38 @@ class AeroPlayMediaService : MediaSessionService() {
 
         setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build())
 
-        mediaSession = MediaSession.Builder(this, exoPlayer)
-            .setSessionActivity(sessionActivityPendingIntent)
-            .setCallback(object : MediaSession.Callback {
+        mediaSession = MediaLibrarySession.Builder(this, exoPlayer, object : MediaLibrarySession.Callback {
+                override fun onGetLibraryRoot(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, params: LibraryParams?) =
+                    Futures.immediateFuture(LibraryResult.ofItem(carLibrary.root(), params))
+
+                override fun onGetItem(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, mediaId: String): ListenableFuture<LibraryResult<MediaItem>> = libraryFuture {
+                    LibraryResult.ofItem(carLibrary.item(mediaId), null)
+                }
+
+                override fun onGetChildren(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, parentId: String, page: Int, pageSize: Int, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = libraryFuture {
+                    LibraryResult.ofItemList(CarBrowseIds.page(carLibrary.children(parentId), page, pageSize), params)
+                }
+
+                override fun onSearch(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, query: String, params: LibraryParams?): ListenableFuture<LibraryResult<Void>> = libraryFuture {
+                    val items = carLibrary.searchItems(query)
+                    session.notifySearchResultChanged(browser, query, items.size, params)
+                    LibraryResult.ofVoid(params)
+                }
+
+                override fun onGetSearchResult(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, query: String, page: Int, pageSize: Int, params: LibraryParams?): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> = libraryFuture {
+                    LibraryResult.ofItemList(CarBrowseIds.page(carLibrary.searchResults(query), page, pageSize), params)
+                }
                 override fun onConnect(
                     session: MediaSession,
                     controller: MediaSession.ControllerInfo
                 ): MediaSession.ConnectionResult {
-                    val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
+                    val ownApp = controller.uid == applicationInfo.uid
+                    val knownHost = controller.packageName in setOf("com.google.android.projection.gearhead", "com.google.android.googlequicksearchbox") &&
+                        packageManager.getPackagesForUid(controller.uid)?.contains(controller.packageName) == true
+                    if (!ownApp && !controller.isTrusted && !knownHost) return MediaSession.ConnectionResult.reject()
+                    val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                         .buildUpon()
-                        .add(SessionCommand(ACTION_SET_NOISY_HANDLING, Bundle.EMPTY))
+                        .apply { if (ownApp) add(SessionCommand(ACTION_SET_NOISY_HANDLING, Bundle.EMPTY)) }
                         .build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(sessionCommands)
@@ -153,7 +227,7 @@ class AeroPlayMediaService : MediaSessionService() {
                     customCommand: SessionCommand,
                     args: Bundle
                 ): ListenableFuture<SessionResult> {
-                    if (customCommand.customAction == ACTION_SET_NOISY_HANDLING) {
+                    if (controller.uid == applicationInfo.uid && customCommand.customAction == ACTION_SET_NOISY_HANDLING) {
                         val enabled = args.getBoolean(EXTRA_NOISY_ENABLED, true)
                         player?.setHandleAudioBecomingNoisy(enabled)
                         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
@@ -166,6 +240,22 @@ class AeroPlayMediaService : MediaSessionService() {
                     controller: MediaSession.ControllerInfo,
                     mediaItems: MutableList<MediaItem>
                 ): ListenableFuture<MutableList<MediaItem>> {
+                    val carRequest = mediaItems.firstOrNull()?.let { CarBrowseIds.decodeTrack(it.mediaId) != null ||
+                        it.requestMetadata.searchQuery != null || (controller.uid != applicationInfo.uid && it.mediaId.isBlank()) } == true
+                    if (carRequest) return serviceScope.future {
+                        withTimeout(25_000) {
+                            carGeneration++
+                            val generation = carGeneration
+                            prefetchJob?.cancel()
+                            remainingCarTracks.clear()
+                            val (video, tail) = carLibrary.selection(mediaItems.first())
+                            val resolved = carLibrary.resolve(video)
+                            check(generation == carGeneration) { "Playback selection changed" }
+                            remainingCarTracks.addAll(tail)
+                            mutableListOf(resolved)
+                        }
+                    }
+                    if (controller.uid != applicationInfo.uid) return Futures.immediateFailedFuture(IllegalArgumentException("Unsupported media ID"))
                     val resolvedItems = mediaItems.map { item ->
                         val uri = item.requestMetadata.mediaUri
                         if (uri != null) {
@@ -180,13 +270,40 @@ class AeroPlayMediaService : MediaSessionService() {
                     }.toMutableList()
                     return Futures.immediateFuture(resolvedItems)
                 }
+
+                override fun onSetMediaItems(session: MediaSession, controller: MediaSession.ControllerInfo,
+                    mediaItems: MutableList<MediaItem>, startIndex: Int, startPositionMs: Long
+                ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+                    val selected = mediaItems.getOrNull(startIndex.takeIf { it >= 0 } ?: 0)
+                    if (selected != null && (CarBrowseIds.decodeTrack(selected.mediaId) != null ||
+                        selected.requestMetadata.searchQuery != null || controller.uid != applicationInfo.uid)) {
+                        // We resolve the selected item now and prepare its sibling queue lazily.
+                        return Futures.transform(onAddMediaItems(session, controller, mutableListOf(selected)),
+                            { resolved -> MediaSession.MediaItemsWithStartPosition(checkNotNull(resolved), 0, startPositionMs) },
+                            com.google.common.util.concurrent.MoreExecutors.directExecutor())
+                    }
+                    return super.onSetMediaItems(session, controller, mediaItems, startIndex, startPositionMs)
+                }
+
+                override fun onPlaybackResumption(session: MediaSession, controller: MediaSession.ControllerInfo): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = serviceScope.future {
+                    withTimeout(25_000) {
+                        carGeneration++
+                        prefetchJob?.cancel()
+                        remainingCarTracks.clear()
+                        val video = requireNotNull(carLibrary.resumption()) { "Thư viện trống. Phát hoặc lưu bài trên điện thoại trước." }
+                        val item = carLibrary.resolve(video)
+                        MediaSession.MediaItemsWithStartPosition(listOf(item), 0, historyRepository.getSavedPosition(video.id)?.positionMs ?: 0L)
+                    }
+                }
             })
+            .setSessionActivity(sessionActivityPendingIntent)
+            .setLibraryErrorReplicationMode(MediaLibrarySession.LIBRARY_ERROR_REPLICATION_MODE_NON_FATAL)
             .build()
 
         player = exoPlayer
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
         return mediaSession
     }
 
@@ -202,6 +319,7 @@ class AeroPlayMediaService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        serviceScope.cancel()
         mediaSession?.run {
             player.release()
             release()
@@ -209,5 +327,34 @@ class AeroPlayMediaService : MediaSessionService() {
         mediaSession = null
         player = null
         super.onDestroy()
+    }
+
+    private fun <T : Any> libraryFuture(block: suspend () -> LibraryResult<T>): ListenableFuture<LibraryResult<T>> = serviceScope.future<LibraryResult<T>> {
+        try { return@future withTimeout<LibraryResult<T>>(25_000) { block() } }
+        catch (error: TimeoutCancellationException) { return@future LibraryResult.ofError<T>(SessionError.ERROR_IO) }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            SourceDiagnostics.failure("car.library", error)
+            return@future LibraryResult.ofError<T>(SessionError.ERROR_BAD_VALUE)
+        }
+    }
+
+    private fun prefetchNextCarTrack() {
+        val currentPlayer = player ?: return
+        if (prefetchJob?.isActive == true || remainingCarTracks.isEmpty() ||
+            currentPlayer.currentMediaItemIndex < currentPlayer.mediaItemCount - 1) return
+        val generation = carGeneration
+        prefetchJob = serviceScope.launch {
+            while (remainingCarTracks.isNotEmpty() && generation == carGeneration) {
+                val next = remainingCarTracks.removeFirst()
+                try {
+                    val item = withTimeout(20_000) { carLibrary.resolve(next) }
+                    if (generation == carGeneration && CarMediaLibrary.summary(currentPlayer.currentMediaItem) != null) currentPlayer.addMediaItem(item)
+                    break
+                } catch (timeout: TimeoutCancellationException) { SourceDiagnostics.failure("car.prefetch", timeout) }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (error: Exception) { SourceDiagnostics.failure("car.prefetch", error) }
+            }
+        }
     }
 }
