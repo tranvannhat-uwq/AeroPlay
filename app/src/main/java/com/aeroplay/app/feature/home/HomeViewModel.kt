@@ -10,6 +10,7 @@ import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.RemotePlaylistUiState
 import com.aeroplay.app.core.model.VideoItem
+import com.aeroplay.app.core.model.AutoMix
 import com.aeroplay.app.core.database.HistoryEntity
 import com.aeroplay.app.core.network.SourceDiagnostics
 import com.aeroplay.app.data.repository.ContentRepository
@@ -59,7 +60,8 @@ data class PersonalizedUiState(
     val musicVideos: List<VideoItem> = emptyList(),
     val popularMusicVideos: List<VideoItem> = emptyList(),
     val musicPlaylists: List<PlaylistItem> = emptyList(),
-    val hasMusicStyleContext: Boolean = false
+    val hasMusicStyleContext: Boolean = false,
+    val autoMixes: List<AutoMix> = emptyList()
 )
 
 enum class RecommendationAction { NOT_INTERESTED, BLOCK_CHANNEL, MARK_WATCHED, WATCH_LATER }
@@ -174,7 +176,8 @@ class HomeViewModel @Inject constructor(
                         musicVideos = result.musicVideos,
                         popularMusicVideos = result.popularMusicVideos,
                         musicPlaylists = result.musicPlaylists,
-                        hasMusicStyleContext = result.hasMusicStyleContext
+                        hasMusicStyleContext = result.hasMusicStyleContext,
+                        autoMixes = result.autoMixes
                     )
                 }
         }
@@ -257,6 +260,13 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             historyRepository.toggleFavorite(video)
         }
+    }
+
+    fun playAutoMix(mix: AutoMix, video: VideoItem) {
+        if (mix.videos.none { it.id == video.id && it.sourceType == video.sourceType }) return
+        viewModelScope.launch { personalizedRecommendations.recordClick(video) }
+        playbackController.loadAndPlayVideo(video, mix.videos, mix.title,
+            openFullPlayer = true, radioMode = false, autoRadioAfterEnd = mix.isMusic, replaceQueue = true)
     }
 
     fun addVideoToPlaylist(playlistId: Long, video: VideoItem) {

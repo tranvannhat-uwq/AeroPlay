@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -69,6 +71,7 @@ import com.aeroplay.app.core.model.ThemeMode
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import com.aeroplay.app.updates.UpdateSettingsCard
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
@@ -145,17 +148,8 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Column {
-                Text(
-                    text = "Cài đặt & Tùy chỉnh",
-                    style = MaterialTheme.typography.headlineMedium
-                )
-                Text(
-                    text = "Giao diện, chất lượng luồng, phát nền và thông tin pháp lý",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            com.aeroplay.app.core.designsystem.BrandPageHeader(title = "Cài đặt & Tùy chỉnh",
+                subtitle = "Giao diện, phát nền và tùy chọn của bạn", modifier = Modifier.fillMaxWidth())
         }
 
         // 1. Content Source Section
@@ -212,7 +206,7 @@ fun SettingsScreen(
         // 2. Theme Section
         item {
             SettingsGroupCard(title = "Giao diện") {
-                Row(
+                FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -224,7 +218,7 @@ fun SettingsScreen(
                                 Text(
                                     when (mode) {
                                         ThemeMode.SYSTEM -> "Hệ thống"
-                                        ThemeMode.DARK -> "Tối (Obsidian)"
+                                        ThemeMode.DARK -> "Tối (Midnight)"
                                         ThemeMode.LIGHT -> "Sáng"
                                     }
                                 )
@@ -251,7 +245,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleSmall
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("360p", "480p", "720p", "1080p").forEach { q ->
                             FilterChip(
                                 selected = settings.defaultQualityLabel == q,
@@ -273,7 +267,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleSmall
                         )
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { spd ->
                             FilterChip(
                                 selected = kotlin.math.abs(settings.defaultPlaybackSpeed - spd) < 0.01f,
@@ -380,6 +374,7 @@ fun SettingsScreen(
         item {
             SettingsGroupCard(title = "Thông tin ứng dụng & Pháp lý") {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.aeroplay.app.core.designsystem.AeroPlayWordmark()
                     SettingsActionRow(
                         icon = Icons.Filled.WarningAmber,
                         title = "Giới hạn & Rủi ro của Nguồn Video Thử nghiệm",

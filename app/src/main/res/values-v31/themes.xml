@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AeroPlay" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">@color/brand_cyan</item>
+        <item name="android:windowBackground">@color/brand_midnight</item>
+        <item name="android:statusBarColor">@color/brand_midnight</item>
+        <item name="android:navigationBarColor">@color/brand_midnight</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowSplashScreenBackground">@color/brand_midnight</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/brand_splash_icon</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+        <item name="android:windowSplashScreenBrandingImage">@drawable/brand_wordmark</item>
+    </style>
+</resources>

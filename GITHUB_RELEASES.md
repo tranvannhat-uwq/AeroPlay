@@ -4,7 +4,7 @@ Kho chính thức: https://github.com/tranvannhat-uwq/AeroPlay
 
 ## Cách dùng trên điện thoại
 
-Cài AeroPlay 1.1.0 trở lên một lần để có tính năng cập nhật (bản mới nhất là 2.0.4). Sau đó vào **Cài đặt → Cập nhật ứng dụng → Kiểm tra cập nhật**. Khi có bản mới, chọn **Tải cập nhật**, chờ kiểm tra APK, rồi chọn **Cài đặt**. Android 8+ có thể yêu cầu bật “Cho phép từ nguồn này” cho AeroPlay. Android vẫn yêu cầu xác nhận cài, ứng dụng không cài ngầm.
+Cài AeroPlay 1.1.0 trở lên để dùng tính năng cập nhật. Vào **Cài đặt → Cập nhật ứng dụng → Kiểm tra cập nhật**. Khi có bản mới, chọn **Tải cập nhật**, chờ ứng dụng kiểm tra APK, rồi chọn **Cài đặt**. Android 8+ có thể yêu cầu bật “Cho phép từ nguồn này” cho AeroPlay và xác nhận cài đặt.
 
 Ứng dụng cũng tự kiểm tra khi mở, tối đa mỗi 24 giờ. Kiểm tra thủ công luôn có thể chạy lại. APK được tải bằng DownloadManager vào thư mục riêng của ứng dụng; bản tải tiếp tục trong nền và được khôi phục theo dõi sau khi mở lại. Trước khi mở trình cài đặt, AeroPlay kiểm tra kích thước, SHA-256, package `com.aeroplay.app`, versionCode, minSdk và certificate phải khớp bản đang cài. Không cần tài khoản GitHub hoặc token trong ứng dụng.
 

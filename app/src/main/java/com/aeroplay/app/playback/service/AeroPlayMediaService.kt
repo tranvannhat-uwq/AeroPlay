@@ -181,7 +181,9 @@ class AeroPlayMediaService : MediaLibraryService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build())
+        setMediaNotificationProvider(DefaultMediaNotificationProvider.Builder(this).build().apply {
+            setSmallIcon(com.aeroplay.app.R.drawable.ic_stat_aeroplay)
+        })
 
         mediaSession = MediaLibrarySession.Builder(this, exoPlayer, object : MediaLibrarySession.Callback {
                 override fun onGetLibraryRoot(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, params: LibraryParams?) =

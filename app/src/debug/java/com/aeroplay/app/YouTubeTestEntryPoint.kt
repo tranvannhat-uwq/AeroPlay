@@ -15,6 +15,8 @@ import com.aeroplay.app.updates.ApkUpdateVerifier
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface YouTubeTestEntryPoint {
+    fun history(): com.aeroplay.app.data.repository.HistoryRepository
+    fun playlists(): com.aeroplay.app.data.repository.PlaylistRepository
     fun deviceMedia(): com.aeroplay.app.data.repository.DeviceMediaRepository
     fun recommendations(): com.aeroplay.app.data.repository.PersonalizedRecommendations
     fun database(): com.aeroplay.app.core.database.AeroPlayDatabase

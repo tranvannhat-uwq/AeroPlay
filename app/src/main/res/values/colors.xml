@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_midnight">#04091E</color>
+    <color name="brand_cyan">#65E9FF</color>
+    <color name="brand_blue">#387DFF</color>
+    <color name="brand_violet">#B6A0FF</color>
+    <color name="brand_launcher_cyan">#047DB5</color>
+    <color name="brand_launcher_blue">#124494</color>
+    <color name="brand_launcher_violet">#6B40C2</color>
+</resources>

@@ -46,7 +46,7 @@ fun UpdateSettingsCard(manager: AppUpdateManager) {
     Surface(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surface) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                com.aeroplay.app.core.designsystem.AeroPlayAppIcon(Modifier.size(28.dp))
                 Text("Cập nhật ứng dụng", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
             }
             Text("AeroPlay ${BuildConfig.VERSION_NAME} · ${state.repository}", style = MaterialTheme.typography.bodySmall)
@@ -81,7 +81,7 @@ fun AppUpdateDialogHost(manager: AppUpdateManager) {
     val release = state.release
     AlertDialog(
         onDismissRequest = { manager.dismissPrompt() },
-        icon = { Icon(Icons.Default.SystemUpdate, contentDescription = null) },
+        icon = { com.aeroplay.app.core.designsystem.AeroPlayAppIcon(Modifier.size(48.dp)) },
         title = { Text(when (state.stage) {
             UpdateStage.AVAILABLE -> "AeroPlay ${release?.versionName} đã có"
             UpdateStage.DOWNLOADING -> "Đang tải bản cập nhật"

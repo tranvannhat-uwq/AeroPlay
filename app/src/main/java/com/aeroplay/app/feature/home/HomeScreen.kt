@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -74,8 +76,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
 import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
-import com.aeroplay.app.core.designsystem.CoralRedAccent
-import com.aeroplay.app.core.designsystem.ElectricViolet
+import com.aeroplay.app.core.designsystem.AeroPlayWordmark
+import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import com.aeroplay.app.core.designsystem.ErrorStateCard
 import com.aeroplay.app.core.designsystem.GlassSurface
 import com.aeroplay.app.core.designsystem.RemotePlaylistDialog
@@ -89,8 +91,10 @@ import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import com.aeroplay.app.core.model.PlaybackPosition
 import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.VideoItem
+import com.aeroplay.app.core.model.AutoMix
+import com.aeroplay.app.core.model.RemotePlaylistUiState
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
@@ -111,6 +115,20 @@ fun HomeScreen(
 
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
     var showSourceSwitchDialog by remember { mutableStateOf(false) }
+    var selectedMix by remember { mutableStateOf<AutoMix?>(null) }
+
+    selectedMix?.let { mix ->
+        RemotePlaylistDialog(
+            state = RemotePlaylistUiState(
+                playlist = PlaylistItem(mix.id, "", mix.title, "AeroPlay • Tự động kết hợp",
+                    mix.videos.firstOrNull()?.thumbnailUrl.orEmpty(), mix.videos.size.toLong(),
+                    mix.videos.firstOrNull()?.sourceType ?: settings.activeSourceType),
+                isLoading = false, videos = mix.videos),
+            onDismiss = { selectedMix = null },
+            onPlay = { video, _, _ -> viewModel.playAutoMix(mix, video); selectedMix = null },
+            playLabel = "Phát bản phối"
+        )
+    }
 
     remotePlaylist?.let { state ->
         RemotePlaylistDialog(
@@ -168,52 +186,17 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(CoralRedAccent, ElectricViolet)
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.PlayArrow,
-                                    contentDescription = "AeroPlay Logo",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = "AeroPlay",
-                                    style = MaterialTheme.typography.headlineMedium,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                )
-                                Text(
-                                    text = "Pure Native Media Player",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        AeroPlayWordmark(Modifier.align(Alignment.CenterVertically))
                         SourceModePill(
                             sourceType = settings.activeSourceType,
+                            modifier = Modifier.align(Alignment.CenterVertically),
                             onClick = { showSourceSwitchDialog = true }
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // Prominent Search Bar
                     GlassSurface(
@@ -252,6 +235,10 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+
+            if (personalized.autoMixes.isNotEmpty()) {
+                item { AutoMixCarousel(personalized.autoMixes, onOpen = { selectedMix = it }) }
             }
 
             if (continueWatching.isNotEmpty()) {
@@ -578,12 +565,12 @@ private fun HorizontalVideoCarouselSection(
                                 Surface(
                                     modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp),
                                     shape = RoundedCornerShape(6.dp),
-                                    color = Color.Black.copy(alpha = 0.80f)
+                                    color = AeroPlayBrand.PlayerScrim.copy(alpha = 0.80f)
                                 ) {
                                     Text(
                                         text = FormatUtils.formatDuration(video.durationSeconds),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White,
+                                        color = AeroPlayBrand.PlayerForeground,
                                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                     )
                                 }
@@ -592,7 +579,7 @@ private fun HorizontalVideoCarouselSection(
                                         progress = { progress.coerceIn(0f, 1f) },
                                         modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.BottomCenter),
                                         color = statusColors.playButton,
-                                        trackColor = Color.White.copy(alpha = 0.3f)
+                                        trackColor = AeroPlayBrand.PlayerForeground.copy(alpha = 0.3f)
                                     )
                                 }
                                 if (onRecommendationAction != null) {

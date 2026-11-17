@@ -1,3 +1,16 @@
+AeroPlay 2.1.0
+
+- Thay icon launcher và logo ngang bằng bộ hình ảnh AeroPlay do người dùng cung cấp; cập nhật splash Android 12+, themed icon Android 13+ và icon thông báo media.
+- Sửa icon bị cắt góc trên splash/launcher bằng vùng đệm an toàn; splash dùng tài nguyên riêng để giữ nguyên hình gốc.
+- Launcher dùng dấu Play/dải sóng riêng trên nền gradient xanh–tím phủ kín, bỏ vòng nền đen quanh ảnh; không thay đổi logo/splash bên trong ứng dụng.
+- Đồng bộ bảng màu Midnight/Cyan/Blue/Violet cho sáng/tối: nền, thẻ kính, thanh điều hướng, tìm kiếm, thư viện, cài đặt, hộp thoại, trình phát và mini player.
+- Logo thu gọn vào thanh đầu trang không khung/viền; chữ thích ứng nền sáng/tối. Nút phát cyan dùng màu biểu tượng tương phản phù hợp.
+- Thu gọn video trong kết quả tìm kiếm thành hàng ngang để lướt được nhiều kết quả hơn; giữ thao tác yêu thích và thêm playlist trong menu ba chấm.
+- Thêm danh sách tự động kết hợp trên Trang chủ: bản phối theo sở thích, thể loại và lượt xem khi đủ bài phù hợp; mở xem danh sách và phát qua hàng đợi hiện tại. Danh sách do AeroPlay tạo, không đồng bộ tài khoản YouTube.
+- Bổ sung nhận lệnh MEDIA_PLAY_FROM_SEARCH để chuyển yêu cầu tìm nhạc vào cùng phiên phát âm thanh Android Auto.
+
+Cài đè để giữ dữ liệu và chữ ký cập nhật. Các chức năng phát nhạc/video, giữ màn hình sáng và tích hợp Android Auto tiếp tục dùng đường phát hiện tại.
+
 AeroPlay 2.0.6
 
 - Bổ sung tích hợp Android Auto dạng ứng dụng âm thanh: duyệt Yêu thích, Nghe gần đây, Playlist, Trên thiết bị và Khám phá nhạc.

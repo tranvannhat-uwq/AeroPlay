@@ -264,7 +264,7 @@ data class UserPlaylist(
 
 enum class ThemeMode(val label: String) {
     SYSTEM("Theo hệ thống"),
-    DARK("Chế độ tối (Obsidian Dark)"),
+    DARK("Chế độ tối (Midnight)"),
     LIGHT("Chế độ sáng (Neutral Light)")
 }
 

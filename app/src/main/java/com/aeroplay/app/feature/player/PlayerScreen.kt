@@ -120,6 +120,7 @@ import com.aeroplay.app.core.designsystem.ErrorStateCard
 import com.aeroplay.app.core.designsystem.GlassBackground
 import com.aeroplay.app.core.designsystem.GlassSurface
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
+import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.core.model.StreamVariant
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
@@ -261,7 +262,7 @@ fun FullPlayerOverlay(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .background(AeroPlayBrand.PlayerScrim),
             contentAlignment = Alignment.Center
         ) {
             PlayerVideoSurface(
@@ -329,12 +330,12 @@ fun FullPlayerOverlay(
             val videoBoxModifier = if (isLandscapeFullscreen) {
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(AeroPlayBrand.PlayerScrim)
             } else {
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
-                    .background(Color.Black)
+                    .background(AeroPlayBrand.PlayerScrim)
             }
 
             Box(
@@ -377,7 +378,7 @@ fun FullPlayerOverlay(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color(0xFF09131C)),
+                            .background(AeroPlayBrand.Midnight),
                         contentAlignment = Alignment.Center
                     ) {
                         AsyncImage(
@@ -409,7 +410,7 @@ fun FullPlayerOverlay(
                             Text(
                                 text = "Chế độ Chỉ Âm Thanh (Tiết kiệm dữ liệu)",
                                 style = MaterialTheme.typography.titleSmall,
-                                color = Color.White
+                                color = AeroPlayBrand.PlayerForeground
                             )
                             Text(
                                 text = state.selectedAudioTrack?.label ?: "Đang phát luồng âm thanh nền",
@@ -448,9 +449,9 @@ fun FullPlayerOverlay(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(Brush.verticalGradient(listOf(
-                                Color.Black.copy(alpha = 0.67f),
-                                Color(0x45150F30),
-                                Color.Black.copy(alpha = 0.76f)
+                                AeroPlayBrand.PlayerScrim.copy(alpha = 0.67f),
+                                AeroPlayBrand.Navy.copy(alpha = 0.32f),
+                                AeroPlayBrand.PlayerScrim.copy(alpha = 0.76f)
                             )))
                     ) {
                         // Top Bar inside video stage
@@ -474,7 +475,7 @@ fun FullPlayerOverlay(
                                 Icon(
                                     imageVector = Icons.Filled.KeyboardArrowDown,
                                     contentDescription = "Thu nhỏ về Mini Player",
-                                    tint = Color.White,
+                                    tint = AeroPlayBrand.PlayerForeground,
                                     modifier = Modifier.size(30.dp)
                                 )
                             }
@@ -485,7 +486,7 @@ fun FullPlayerOverlay(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
                                         .clickable { showQualityDialog = true },
-                                    color = Color.Black.copy(alpha = 0.6f),
+                                    color = AeroPlayBrand.PlayerScrim.copy(alpha = 0.6f),
                                     shape = RoundedCornerShape(8.dp)
                                 ) {
                                     Text(
@@ -495,7 +496,7 @@ fun FullPlayerOverlay(
                                             state.selectedStreamVariant?.resolutionLabel ?: "Auto"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White,
+                                        color = AeroPlayBrand.PlayerForeground,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                     )
                                 }
@@ -504,7 +505,7 @@ fun FullPlayerOverlay(
                                     Icon(
                                         imageVector = Icons.Filled.PictureInPictureAlt,
                                         contentDescription = "Bật Picture-in-Picture",
-                                        tint = Color.White
+                                        tint = AeroPlayBrand.PlayerForeground
                                     )
                                 }
                             }
@@ -526,7 +527,7 @@ fun FullPlayerOverlay(
                                 Icon(
                                     imageVector = Icons.Filled.SkipPrevious,
                                     contentDescription = "Bài trước",
-                                    tint = Color.White,
+                                    tint = AeroPlayBrand.PlayerForeground,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -538,7 +539,7 @@ fun FullPlayerOverlay(
                                 Icon(
                                     imageVector = Icons.Filled.Replay10,
                                     contentDescription = "Lùi 10 giây",
-                                    tint = Color.White,
+                                    tint = AeroPlayBrand.PlayerForeground,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -558,7 +559,7 @@ fun FullPlayerOverlay(
                                     Icon(
                                         imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                         contentDescription = if (state.isPlaying) "Tạm dừng" else "Phát",
-                                        tint = Color.White,
+                                        tint = statusColors.onPlayButton,
                                         modifier = Modifier.size(34.dp)
                                     )
                                 }
@@ -571,7 +572,7 @@ fun FullPlayerOverlay(
                                 Icon(
                                     imageVector = Icons.Filled.Forward10,
                                     contentDescription = "Tua 10 giây",
-                                    tint = Color.White,
+                                    tint = AeroPlayBrand.PlayerForeground,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -586,7 +587,7 @@ fun FullPlayerOverlay(
                                 Icon(
                                     imageVector = Icons.Filled.SkipNext,
                                     contentDescription = "Bài tiếp theo",
-                                    tint = Color.White,
+                                    tint = AeroPlayBrand.PlayerForeground,
                                     modifier = Modifier.size(32.dp)
                                 )
                             }
@@ -620,7 +621,7 @@ fun FullPlayerOverlay(
                                 colors = SliderDefaults.colors(
                                     thumbColor = statusColors.playButton,
                                     activeTrackColor = statusColors.playButton,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.35f)
+                                    inactiveTrackColor = AeroPlayBrand.PlayerForeground.copy(alpha = 0.35f)
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -633,7 +634,7 @@ fun FullPlayerOverlay(
                                 Text(
                                     text = "${FormatUtils.formatMillis(displayPos)} / ${FormatUtils.formatMillis(state.durationMs)}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White
+                                    color = AeroPlayBrand.PlayerForeground
                                 )
 
                                 IconButton(
@@ -654,7 +655,7 @@ fun FullPlayerOverlay(
                                             Icons.Filled.Fullscreen
                                         },
                                         contentDescription = "Toàn màn hình / Xoay ngang",
-                                        tint = Color.White
+                                        tint = AeroPlayBrand.PlayerForeground
                                     )
                                 }
                             }
@@ -981,7 +982,7 @@ fun MiniPlayerBar(
                             .padding(5.dp)
                             .aspectRatio(16f / 9f)
                             .clip(RoundedCornerShape(17.dp))
-                            .background(Color.Black)
+                            .background(AeroPlayBrand.PlayerScrim)
                             .clickable(onClickLabel = "Mở rộng trình phát", onClick = onExpand)
                     ) {
                         if (state.isAudioOnlyMode || state.isLoadingMetadata || state.error != null) {
@@ -997,24 +998,24 @@ fun MiniPlayerBar(
                         if (state.isBuffering || state.isLoadingMetadata) {
                             CircularProgressIndicator(
                                 modifier = Modifier.align(Alignment.Center).size(24.dp),
-                                color = Color.White,
+                                color = AeroPlayBrand.PlayerForeground,
                                 strokeWidth = 2.dp
                             )
                         }
                         Surface(
                             modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
                             shape = CircleShape,
-                            color = Color(0xA623193A)
+                            color = AeroPlayBrand.Navy.copy(alpha = 0.75f)
                         ) {
                             IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Filled.Close, "Đóng trình phát", tint = Color.White, modifier = Modifier.size(19.dp))
+                                Icon(Icons.Filled.Close, "Đóng trình phát", tint = AeroPlayBrand.PlayerForeground, modifier = Modifier.size(19.dp))
                             }
                         }
                         if (state.isAudioOnlyMode) {
                             Icon(
                                 Icons.Filled.Headphones,
                                 "Chỉ âm thanh",
-                                tint = Color.White,
+                                tint = AeroPlayBrand.PlayerForeground,
                                 modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).size(20.dp)
                             )
                         }
@@ -1023,8 +1024,8 @@ fun MiniPlayerBar(
                                 if (state.durationMs > 0) (state.currentPositionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
                             },
                             modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.BottomCenter),
-                            color = Color(0xFFC5A5FF),
-                            trackColor = Color.White.copy(alpha = 0.27f)
+                            color = AeroPlayBrand.Cyan,
+                            trackColor = AeroPlayBrand.PlayerForeground.copy(alpha = 0.27f)
                         )
                     }
                     Row(

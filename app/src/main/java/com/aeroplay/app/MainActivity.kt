@@ -122,7 +122,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         requestNotificationPermissionIfNeeded()
         appUpdates.checkOnLaunch()
-        if (savedInstanceState == null) handleSharedVideos(intent)
+        if (savedInstanceState == null) {
+            handleSharedVideos(intent)
+            handleMediaSearch(intent)
+        }
 
         val filter = IntentFilter(PipController.ACTION_PIP_TOGGLE_PLAY)
         ContextCompat.registerReceiver(
@@ -197,6 +200,12 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleSharedVideos(intent)
+        handleMediaSearch(intent)
+    }
+
+    private fun handleMediaSearch(intent: Intent?) {
+        if (intent?.action != android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) return
+        playbackController.playFromMediaSearch(intent.getStringExtra(android.app.SearchManager.QUERY).orEmpty().take(200))
     }
 
     @Suppress("DEPRECATION")

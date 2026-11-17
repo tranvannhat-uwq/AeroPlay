@@ -63,7 +63,7 @@ flowchart TD
 - `com.aeroplay.app.core.model`: Toàn bộ các domain model chuẩn (`VideoItem`, `VideoDetail`, `ChannelItem`, `PlaylistItem`, `StreamVariant`, `AudioTrack`, `SubtitleTrack`, `PlaybackQueue`, `PlaybackState`, `PlaybackPosition`, `SourceError`).
 - `com.aeroplay.app.core.database`: `AeroPlayDatabase`, `AeroPlayDao`, các Entity cho lịch sử xem, yêu thích, playlist, vị trí phát và lịch sử tìm kiếm.
 - `com.aeroplay.app.core.network`: `NewPipeOkHttpDownloader`, `NetworkConnectivityObserver`, `NetworkModule`.
-- `com.aeroplay.app.core.designsystem`: Hệ màu 2026 Obsidian/Coral/Violet (`Theme.kt`), `FloatingNavigationBar`, `VideoFeedCard`, `SkeletonVideoCard`, `ErrorStateCard`.
+- `com.aeroplay.app.core.designsystem`: Hệ màu AeroPlay Midnight/Cyan/Blue/Violet sáng/tối (`Theme.kt`), logo/icon dùng chung (`Brand.kt`), `FloatingNavigationBar`, `VideoFeedCard`, `SkeletonVideoCard`, `ErrorStateCard`. Các màn hình và hộp thoại lấy màu theo MaterialTheme; xem `BRAND_REFRESH_AUDIT.md`.
 - `com.aeroplay.app.data.source`: `DemoLocalMediaSource` và `ExperimentalExtractorSource`.
 - `com.aeroplay.app.data.repository`: các repository cốt lõi cùng các lớp triển khai Hilt Singleton; `PersonalizedRecommendations` tạo feed, `MusicRecommendations` nhận diện ca khúc/xếp hạng nhạc và `RemotePlaylistRepository` mở playlist nguồn.
 - `com.aeroplay.app.playback.service`: `AeroPlayMediaService` (`MediaSessionService`).

@@ -314,13 +314,33 @@ class PlaybackControllerManager @Inject constructor(
         }
     }
 
+    /** Route Assistant's public voice-search intent through the existing audio library session. */
+    fun playFromMediaSearch(query: String) {
+        scope.launch {
+            try {
+                val controller = mediaController ?: withTimeout(10_000) { checkNotNull(controllerFuture).await() }
+                val request = MediaItem.Builder().setRequestMetadata(
+                    MediaItem.RequestMetadata.Builder().setSearchQuery(query.trim().take(200)).build()
+                ).build()
+                controller.setMediaItem(request)
+                controller.prepare()
+                controller.play()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                SourceDiagnostics.failure("media.search.intent", error)
+                _playbackState.update { it.copy(error = SourceError.PlaybackFailed("Không thể phát kết quả tìm nhạc. Hãy thử lại.")) }
+            }
+        }
+    }
+
     fun loadAndPlayVideo(
         video: VideoItem,
         queueItems: List<VideoItem> = listOf(video),
         queueTitle: String = "Danh sách đang phát",
         openFullPlayer: Boolean = true,
         radioMode: Boolean = false,
-        autoRadioAfterEnd: Boolean = false
+        autoRadioAfterEnd: Boolean = false,
+        replaceQueue: Boolean = false
     ) {
         if (carAudioOverride) {
             // A phone selection takes over the same player; don't let old car events replace its UI state.
@@ -347,7 +367,17 @@ class PlaybackControllerManager @Inject constructor(
         }
         SourceDiagnostics.event("player.selection", "source=${video.sourceType}")
         val currentLoadedId = _playbackState.value.currentVideo?.id
-        if (currentLoadedId == video.id && _playbackState.value.currentDetail != null && _playbackState.value.error == null) {
+        if (currentLoadedId == video.id && _playbackState.value.currentVideo?.sourceType == video.sourceType &&
+            _playbackState.value.currentDetail != null && _playbackState.value.error == null) {
+            if (replaceQueue) {
+                radioRecommendationJob?.cancel()
+                val items = if (queueItems.any { it.id == video.id && it.sourceType == video.sourceType }) queueItems else listOf(video) + queueItems
+                val queue = PlaybackQueue(items, items.indexOfFirst { it.id == video.id }.coerceAtLeast(0),
+                    queueTitle, radioMode, autoRadioAfterEnd)
+                playbackRepository.updateQueue(queue)
+                _playbackState.update { it.copy(queue = queue) }
+                mediaController?.play()
+            }
             // Requirement V.3: Do not open duplicate players for the same active content
             _playbackState.update {
                 it.copy(

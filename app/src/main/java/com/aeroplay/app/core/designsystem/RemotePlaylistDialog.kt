@@ -33,7 +33,8 @@ import com.aeroplay.app.core.model.VideoItem
 fun RemotePlaylistDialog(
     state: RemotePlaylistUiState,
     onDismiss: () -> Unit,
-    onPlay: (VideoItem, List<VideoItem>, String) -> Unit
+    onPlay: (VideoItem, List<VideoItem>, String) -> Unit,
+    playLabel: String = "Phát playlist"
 ) {
     val title = state.playlist.title.ifBlank { "Playlist" }
     AlertDialog(
@@ -105,7 +106,7 @@ fun RemotePlaylistDialog(
             TextButton(
                 onClick = { state.videos.firstOrNull()?.let { onPlay(it, state.videos, title) } },
                 enabled = !state.isLoading && state.videos.isNotEmpty()
-            ) { Text("Phát playlist") }
+            ) { Text(playLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Đóng") } }
     )

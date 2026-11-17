@@ -11,6 +11,7 @@ import com.aeroplay.app.core.database.PlaylistVideoEntity
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.VideoItem
+import com.aeroplay.app.core.model.AutoMix
 import com.aeroplay.app.core.network.SourceDiagnostics
 import com.aeroplay.app.data.source.DemoLocalMediaSource
 import com.aeroplay.app.data.source.ExperimentalExtractorSource
@@ -223,7 +224,8 @@ data class PersonalizedResult(
     val musicVideos: List<VideoItem> = emptyList(),
     val popularMusicVideos: List<VideoItem> = emptyList(),
     val musicPlaylists: List<PlaylistItem> = emptyList(),
-    val hasMusicStyleContext: Boolean = false
+    val hasMusicStyleContext: Boolean = false,
+    val autoMixes: List<AutoMix> = emptyList()
 )
 
 @Singleton
@@ -262,6 +264,11 @@ class PersonalizedRecommendations @Inject constructor(
         val blocked = dao.getBlockedRecommendationChannels()
         val impressions = dao.getRecommendationImpressions()
         val profile = RecommendationRanking.buildProfile(history, favorites, playlists, searches, feedback, blocked, impressions, now)
+        fun allowed(video: VideoItem): Boolean =
+            video.sourceType == source && RecommendationRanking.stableKey(video) !in profile.negativeInteractions &&
+                RecommendationRanking.normalize(video.channelName) !in profile.blockedChannels
+        val preferred = (favorites.map { it.toVideoItem() } + history.map { it.toVideoItem() } + playlists.map { it.toVideoItem() })
+            .filter(::allowed)
         if (source == ContentSourceType.EXPERIMENTAL_EXTRACTOR && !YouTubePolicyFeatureFlags.allowNewPipeYouTube) {
             val allowed = RecommendationRanking.rankForProfile(openMedia.getRecommendedVideos(), profile, now = now)
             return@withContext PersonalizedResult(
@@ -277,13 +284,13 @@ class PersonalizedRecommendations @Inject constructor(
         }
         val seeds = sourceHistory.map { RecommendationSeed(it.toVideoItem(), it.playCount, it.watchedAtEpochMs) } +
             sourceFavorites.map { RecommendationSeed(it.toVideoItem(), 1, it.addedAtEpochMs) }
-        val musicSeed = (listOfNotNull(currentVideo?.takeIf { currentIsMusic ||
-            MusicStyleAnalyzer.analyze(it.title, it.channelName, currentDescription).isLikelyMusic }) +
+        val musicSeed = (listOfNotNull(currentVideo?.takeIf { it.sourceType == source && (currentIsMusic ||
+            MusicStyleAnalyzer.analyze(it.title, it.channelName, currentDescription).isLikelyMusic) }) +
             seeds.sortedByDescending { RecommendationRanking.seedWeight(it, now) }.map { it.video })
             .firstOrNull { (currentIsMusic && it.id == currentVideo?.id) ||
                 MusicStyleAnalyzer.analyze(it.title, it.channelName,
                     if (it.id == currentVideo?.id) currentDescription else "").isLikelyMusic }
-            ?: currentVideo?.takeIf { currentIsMusic }
+            ?: currentVideo?.takeIf { it.sourceType == source && currentIsMusic }
         val musicDescription = currentDescription.takeIf { musicSeed?.id == currentVideo?.id }.orEmpty()
         val inferredStyle = musicSeed?.let { MusicStyleAnalyzer.analyze(it.title, it.channelName, musicDescription) }
         val musicStyle = if (currentIsMusic && musicSeed?.id == currentVideo?.id && inferredStyle?.isLikelyMusic == false) {
@@ -294,25 +301,27 @@ class PersonalizedRecommendations @Inject constructor(
         } ?: true
         val musicQuery = when {
             !source.isExperimental -> null
-            musicStyle == null -> "nhac viet pho bien"
+            musicStyle == null -> "nhac viet official mv"
             musicStyle.genres.isNotEmpty() -> musicStyle.genres.first().let { genre ->
-                if (vietnameseMusicContext) "$genre nhac viet" else "$genre music songs"
+                if (vietnameseMusicContext) "$genre nhac viet official audio" else "$genre music official audio"
             }
-            vietnameseMusicContext -> "nhac tre viet moi"
-            else -> "popular songs music"
+            vietnameseMusicContext -> "nhac viet official mv"
+            else -> "popular songs official music video"
         }
         val queries = (listOfNotNull(musicQuery) + profile.preferredSearchTerms + profile.preferredTopics.keys.take(4))
             .map(String::trim).filter { it.length >= 2 }.distinct().take(2)
 
         if (!source.isExperimental) {
-            val ranked = RecommendationRanking.rankForProfile(openMedia.getRecommendedVideos(), profile, now = now)
+            val catalog = openMedia.getRecommendedVideos().filter(::allowed)
+            val ranked = RecommendationRanking.rankForProfile(catalog, profile, now = now)
             return@withContext PersonalizedResult(
                 ranked,
                 when {
                     ranked.isNotEmpty() -> ""
                     seeds.isEmpty() && queries.isEmpty() -> "Xem video hoặc tìm chủ đề bạn thích để bắt đầu cá nhân hóa."
                     else -> "Chưa có nội dung tương tự trong danh mục Chuẩn Mở."
-                }
+                },
+                autoMixes = AutoMixPlanner.build(catalog, source, preferred = preferred)
             )
         }
 
@@ -320,7 +329,7 @@ class PersonalizedRecommendations @Inject constructor(
             emptyList(), "Xem video hoặc tìm chủ đề bạn thích để AeroPlay bắt đầu cá nhân hóa."
         )
         val topSeeds = seeds.sortedByDescending { RecommendationRanking.seedWeight(it, now) }
-            .let { ordered -> (listOfNotNull(currentVideo?.let { RecommendationSeed(it, 1, now) }) + ordered) }
+            .let { ordered -> (listOfNotNull(currentVideo?.takeIf { it.sourceType == source }?.let { RecommendationSeed(it, 1, now) }) + ordered) }
             .distinctBy { RecommendationRanking.stableKey(it.video) }.take(2)
         val key = (topSeeds.map { RecommendationRanking.stableKey(it.video) } + queries).joinToString("|")
         var pool = synchronized(cache) { cache[key]?.takeIf { now - it.at < CACHE_TTL_MS } }
@@ -355,7 +364,8 @@ class PersonalizedRecommendations @Inject constructor(
             if (completed == null) SourceDiagnostics.event("recommendation.candidates", "timeout=true seedCount=${topSeeds.size} queryCount=${queries.size}")
             if (candidates.isEmpty() && playlistCandidates.isEmpty()) return@withContext PersonalizedResult(
                 emptyList(), if (completed == null) "Tải gợi ý quá lâu. Kéo xuống để thử lại."
-                else "Chưa lấy được video liên quan từ nguồn hiện tại."
+                else "Chưa lấy được video liên quan từ nguồn hiện tại.",
+                autoMixes = AutoMixPlanner.build(preferred, source, musicSeed?.takeIf(::allowed), musicDescription)
             )
             val loaded = CachedCandidates(
                 now,
@@ -405,7 +415,15 @@ class PersonalizedRecommendations @Inject constructor(
             musicVideos = styleVideos.take(10),
             popularMusicVideos = popularVideos,
             musicPlaylists = stylePlaylists,
-            hasMusicStyleContext = musicSeed != null
+            hasMusicStyleContext = musicSeed != null,
+            autoMixes = AutoMixPlanner.build(
+                candidates = (styleVideos + pool.musicVideos + pool.videos).filter(::allowed),
+                source = source,
+                seed = musicSeed?.takeIf(::allowed),
+                seedDescription = musicDescription,
+                fromMusicSearch = pool.musicVideos.filter(::allowed).map(RecommendationRanking::stableKey).toSet(),
+                preferred = preferred
+            )
         )
     }
 

@@ -14,6 +14,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.compose.ui.graphics.toArgb
+import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 
 /** Official embedded player only. No OAuth credentials, stream extraction or background playback. */
@@ -31,16 +33,21 @@ class YouTubePlayerActivity : androidx.activity.ComponentActivity() {
             finish()
             return
         }
-        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xff101014.toInt()) }
+        val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(AeroPlayBrand.Midnight.toArgb()) }
         androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(layout) { view, insets ->
             val bars = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
-        layout.addView(Button(this).apply { text = "‹ Quay lại AeroPlay"; setOnClickListener { finish() } })
+        layout.addView(Button(this).apply {
+            text = "‹ Quay lại AeroPlay"
+            backgroundTintList = android.content.res.ColorStateList.valueOf(AeroPlayBrand.NavyRaised.toArgb())
+            setTextColor(AeroPlayBrand.Cyan.toArgb())
+            setOnClickListener { finish() }
+        })
         layout.addView(TextView(this).apply {
             text = "YouTube • Trình phát chính thức\nChạm nút phát trong khung video. Video sẽ dừng khi chuyển ứng dụng."
-            setTextColor(0xffffffff.toInt()); setPadding(20, 12, 20, 12)
+            setTextColor(AeroPlayBrand.PlayerForeground.toArgb()); setPadding(20, 12, 20, 12)
         })
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
@@ -63,6 +70,8 @@ class YouTubePlayerActivity : androidx.activity.ComponentActivity() {
         layout.addView(webView, LinearLayout.LayoutParams(-1, 0, 1f))
         layout.addView(Button(this).apply {
             text = "Video không cho nhúng? Mở bằng YouTube"
+            backgroundTintList = android.content.res.ColorStateList.valueOf(AeroPlayBrand.Blue.toArgb())
+            setTextColor(AeroPlayBrand.PlayerForeground.toArgb())
             setOnClickListener { openExternal(Uri.parse("https://www.youtube.com/watch?v=$videoId")) }
         })
         setContentView(layout)

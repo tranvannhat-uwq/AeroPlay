@@ -167,24 +167,15 @@ fun LibraryScreen(
             .padding(top = 12.dp)
     ) {
         // Header
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Thư viện cá nhân",
-                    style = MaterialTheme.typography.headlineMedium
-                )
-                Text(
-                    text = "Lưu trên thiết bị • Không cần tài khoản",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+            com.aeroplay.app.core.designsystem.BrandPageHeader(
+                title = "Thư viện cá nhân", subtitle = "Lưu trên thiết bị • Không cần tài khoản",
+                modifier = Modifier.fillMaxWidth())
 
             if (selectedTab == LibraryTab.DEVICE) {
                 Button(

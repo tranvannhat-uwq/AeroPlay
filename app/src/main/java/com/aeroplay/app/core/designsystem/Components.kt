@@ -177,7 +177,7 @@ fun SourceModePill(
 ) {
     val statusColors = LocalAeroPlayStatusColors.current
     val isExp = sourceType.isExperimental
-    val badgeColor = if (isExp) statusColors.experimentalWarning else statusColors.verifiedBadge
+    val badgeColor = if (isExp) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
     val text = if (isExp) "Extractor Thử nghiệm" else "Nguồn Chuẩn Mở"
 
     Surface(
@@ -252,7 +252,7 @@ fun VideoFeedCard(
                         .align(Alignment.BottomCenter)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.65f))
+                                colors = listOf(Color.Transparent, AeroPlayBrand.PlayerScrim.copy(alpha = 0.65f))
                             )
                         )
                 )
@@ -263,7 +263,7 @@ fun VideoFeedCard(
                         .align(Alignment.TopStart)
                         .padding(10.dp),
                     shape = RoundedCornerShape(10.dp),
-                    color = Color.Black.copy(alpha = 0.65f)
+                    color = AeroPlayBrand.PlayerScrim.copy(alpha = 0.65f)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -283,7 +283,7 @@ fun VideoFeedCard(
                                 ContentSourceType.DEMO_LOCAL -> "Open HD"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White
+                            color = AeroPlayBrand.PlayerForeground
                         )
                     }
                 }
@@ -294,12 +294,12 @@ fun VideoFeedCard(
                         .align(Alignment.BottomEnd)
                         .padding(10.dp),
                     shape = RoundedCornerShape(8.dp),
-                    color = Color.Black.copy(alpha = 0.80f)
+                    color = AeroPlayBrand.PlayerScrim.copy(alpha = 0.80f)
                 ) {
                     Text(
                         text = FormatUtils.formatDuration(video.durationSeconds),
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White,
+                        color = AeroPlayBrand.PlayerForeground,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
@@ -312,7 +312,7 @@ fun VideoFeedCard(
                             .height(3.dp)
                             .align(Alignment.BottomCenter),
                         color = statusColors.playButton,
-                        trackColor = Color.White.copy(alpha = 0.3f)
+                        trackColor = AeroPlayBrand.PlayerForeground.copy(alpha = 0.3f)
                     )
                 }
             }
@@ -411,12 +411,12 @@ fun CompactVideoRowCard(
                         .align(Alignment.BottomEnd)
                         .padding(6.dp),
                     shape = RoundedCornerShape(6.dp),
-                    color = Color.Black.copy(alpha = 0.80f)
+                    color = AeroPlayBrand.PlayerScrim.copy(alpha = 0.80f)
                 ) {
                     Text(
                         text = FormatUtils.formatDuration(video.durationSeconds),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color.White,
+                        color = AeroPlayBrand.PlayerForeground,
                         modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
@@ -428,7 +428,7 @@ fun CompactVideoRowCard(
                             .height(3.dp)
                             .align(Alignment.BottomCenter),
                         color = statusColors.playButton,
-                        trackColor = Color.White.copy(alpha = 0.3f)
+                        trackColor = AeroPlayBrand.PlayerForeground.copy(alpha = 0.3f)
                     )
                 }
             }

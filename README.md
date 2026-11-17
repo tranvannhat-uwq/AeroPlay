@@ -12,7 +12,7 @@
 
 - Android Auto: thư viện âm thanh, điều khiển media và tìm kiếm qua MediaLibraryService; bản 2.0.6 cần kiểm thử trên đầu xe thật, xem hướng dẫn ở trên.
 
-- Giao diện Liquid Glass sáng, vuốt thu video thành cửa sổ nổi và vuốt lên để mở rộng.
+- Giao diện Liquid Glass sáng/tối với nhận diện AeroPlay Midnight/Cyan/Blue/Violet; vuốt thu video thành cửa sổ nổi và vuốt lên để mở rộng.
 - Trình phát ngang ẩn thanh hệ thống; nút điều khiển tự ẩn sau 4 giây.
 - Gợi ý Dành cho bạn theo lịch sử xem; khi phát nhạc có radio cùng phong cách, hạn chế lặp phiên bản cùng ca khúc, cùng kênh và thêm các nhóm nhạc phổ biến/playlist khi nguồn trả dữ liệu.
 - Thư viện video từ thiết bị, chọn từ Ảnh/Thư viện ảnh hoặc chia sẻ sang AeroPlay, phát ngoại tuyến và phát nền.

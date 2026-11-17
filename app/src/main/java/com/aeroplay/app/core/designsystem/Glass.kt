@@ -22,9 +22,10 @@ val LocalFloatingPlayerInset = staticCompositionLocalOf { 0.dp }
 fun GlassBackground(modifier: Modifier = Modifier) {
     val base = MaterialTheme.colorScheme.background
     val fill = if (LocalGlassLight.current) {
-        Brush.linearGradient(listOf(Color(0xFFF9FAFF), Color(0xFFEDF0FF), Color(0xFFF8EEFA), Color(0xFFF2F8FF)))
+        Brush.linearGradient(listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surfaceContainerLow,
+            MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.background))
     } else {
-        Brush.linearGradient(listOf(base, Color(0xFF151529), base))
+        Brush.linearGradient(listOf(base, MaterialTheme.colorScheme.surfaceContainerLow, base))
     }
     Box(modifier.fillMaxSize().background(fill))
 }
@@ -39,11 +40,12 @@ fun GlassSurface(
 ) {
     val light = LocalGlassLight.current
     val surface = MaterialTheme.colorScheme.surface
-    val edge = if (light) Color.White.copy(alpha = 0.96f) else Color.White.copy(alpha = 0.15f)
+    val scheme = MaterialTheme.colorScheme
+    val edge = scheme.outlineVariant.copy(alpha = if (light) 0.8f else 0.7f)
     val fill = if (light) {
-        listOf(Color.White.copy(alpha = 0.96f), Color(0xE8F8F6FF), Color(0xDCF0F7FF))
+        listOf(scheme.surface, scheme.surfaceContainerLow, scheme.surface)
     } else {
-        listOf(Color(0xED25283C), surface.copy(alpha = 0.92f))
+        listOf(scheme.surfaceContainerHigh.copy(alpha = 0.97f), surface.copy(alpha = 0.97f))
     }
     val colors = if (translucent) fill else fill.map { it.copy(alpha = 1f) }
     Surface(

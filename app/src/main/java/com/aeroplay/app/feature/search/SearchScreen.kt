@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,12 +30,18 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -67,8 +75,7 @@ import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
 import com.aeroplay.app.core.designsystem.ErrorStateCard
 import com.aeroplay.app.core.designsystem.RemotePlaylistDialog
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
-import com.aeroplay.app.core.designsystem.SkeletonVideoCard
-import com.aeroplay.app.core.designsystem.VideoFeedCard
+import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import com.aeroplay.app.core.model.ChannelItem
 import com.aeroplay.app.core.model.PlaylistItem
 import com.aeroplay.app.core.model.VideoItem
@@ -111,6 +118,9 @@ fun SearchScreen(
             .padding(top = 12.dp)
     ) {
         // Search Input Bar
+        com.aeroplay.app.core.designsystem.BrandPageHeader(
+            title = "Tìm kiếm", subtitle = "Khám phá âm nhạc & video",
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp))
         OutlinedTextField(
             value = uiState.query,
             onValueChange = { viewModel.onQueryChange(it) },
@@ -308,8 +318,8 @@ fun SearchScreen(
             } else {
                 when {
                     uiState.isLoading -> {
-                        items(3) {
-                            SkeletonVideoCard()
+                        items(5) {
+                            SearchResultSkeleton()
                         }
                     }
                     uiState.error != null -> {
@@ -371,7 +381,7 @@ fun SearchScreen(
 
                         if (showVideos) {
                             items(uiState.videos, key = { "vid_${it.id}" }) { video ->
-                                VideoFeedCard(
+                                SearchVideoResultRow(
                                     video = video,
                                     isFavorite = video.id in favoriteIds,
                                     onClick = { viewModel.playVideo(video) },
@@ -429,8 +439,8 @@ private fun SearchResultsList(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             content = content
         )
         if (isRefreshing || refreshState.distanceFraction > 0f) {
@@ -439,6 +449,81 @@ private fun SearchResultsList(
                 isRefreshing = isRefreshing,
                 modifier = Modifier.align(Alignment.TopCenter).testTag("PullToRefreshIndicator")
             )
+        }
+    }
+}
+
+/** Search prioritizes scanning many results; feed cards remain large on the home page. */
+@Composable
+private fun SearchVideoResultRow(
+    video: VideoItem,
+    isFavorite: Boolean,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onAddToPlaylist: () -> Unit
+) {
+    var menuOpen by remember(video.id) { mutableStateOf(false) }
+    Surface(
+        modifier = Modifier.fillMaxWidth().testTag("SearchVideoResult").clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        color = androidx.compose.ui.graphics.Color.Transparent
+    ) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 88.dp).padding(vertical = 6.dp),
+            verticalAlignment = Alignment.Top) {
+            Box(Modifier.width(120.dp).aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                AsyncImage(model = video.thumbnailUrl, contentDescription = null,
+                    contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp),
+                    color = AeroPlayBrand.PlayerScrim.copy(alpha = 0.85f), shape = RoundedCornerShape(4.dp)) {
+                    Text(if (video.isLive) "TRỰC TIẾP" else FormatUtils.formatDuration(video.durationSeconds),
+                        style = MaterialTheme.typography.labelSmall, color = AeroPlayBrand.PlayerForeground,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+                }
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2,
+                    overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
+                if (video.channelName.isNotBlank()) Text(video.channelName,
+                    style = MaterialTheme.typography.bodySmall, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                val metadata = listOf(FormatUtils.formatViewCount(video.viewCount), video.uploadedText)
+                    .filter(String::isNotBlank).joinToString(" • ")
+                if (metadata.isNotBlank()) Text(metadata, style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Box {
+                IconButton(onClick = { menuOpen = true }) {
+                    Icon(Icons.Filled.MoreVert, contentDescription = "Tùy chọn video: ${video.title}",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(text = { Text(if (isFavorite) "Bỏ yêu thích" else "Yêu thích") },
+                        leadingIcon = { Icon(if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = null) },
+                        onClick = { menuOpen = false; onToggleFavorite() })
+                    DropdownMenuItem(text = { Text("Thêm vào danh sách phát") },
+                        leadingIcon = { Icon(Icons.Filled.BookmarkAdd, contentDescription = null) },
+                        onClick = { menuOpen = false; onAddToPlaylist() })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchResultSkeleton() {
+    Row(Modifier.fillMaxWidth().heightIn(min = 88.dp).padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Box(Modifier.width(120.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            repeat(3) { index ->
+                Box(Modifier.fillMaxWidth(if (index == 2) 0.6f else 0.9f).height(if (index == 0) 16.dp else 10.dp)
+                    .clip(RoundedCornerShape(4.dp)).background(MaterialTheme.colorScheme.surfaceVariant))
+            }
         }
     }
 }
