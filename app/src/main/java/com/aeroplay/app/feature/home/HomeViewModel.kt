@@ -12,6 +12,7 @@ import com.aeroplay.app.core.model.RemotePlaylistUiState
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.core.model.AutoMix
 import com.aeroplay.app.core.database.HistoryEntity
+import com.aeroplay.app.core.database.ContentRestrictionEntity
 import com.aeroplay.app.core.network.SourceDiagnostics
 import com.aeroplay.app.data.repository.ContentRepository
 import com.aeroplay.app.data.repository.HistoryRepository
@@ -23,6 +24,7 @@ import com.aeroplay.app.data.repository.RemotePlaylistRepository
 import com.aeroplay.app.data.repository.MusicStyleAnalyzer
 import com.aeroplay.app.data.repository.LibraryPreferencesRepository
 import com.aeroplay.app.data.repository.ContentRestrictionPolicy
+import com.aeroplay.app.data.repository.RecommendationRanking
 import com.aeroplay.app.data.source.SourceErrorException
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,12 +38,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -70,7 +70,6 @@ data class PersonalizedUiState(
 enum class RecommendationAction { NOT_INTERESTED, BLOCK_CHANNEL, MARK_WATCHED, WATCH_LATER, RESTRICT }
 
 @HiltViewModel
-@OptIn(FlowPreview::class)
 class HomeViewModel @Inject constructor(
     private val contentRepository: ContentRepository,
     private val historyRepository: HistoryRepository,
@@ -82,9 +81,15 @@ class HomeViewModel @Inject constructor(
     private val libraryPreferences: LibraryPreferencesRepository
 ) : ViewModel() {
 
+    private val recommendationFilters = combine(libraryPreferences.restrictions,
+        personalizedRecommendations.feedback, personalizedRecommendations.blockedChannels) { restrictions, feedback, blocked ->
+        HomeRecommendationFilters(restrictions,
+            feedback.filter { it.feedbackType == RecommendationRanking.NOT_INTERESTED || it.feedbackType == RecommendationRanking.MARKED_WATCHED }
+                .map { it.videoId }.toSet(), blocked.map { it.normalizedChannelName }.toSet())
+    }
     private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState = combine(_uiState, libraryPreferences.restrictions) { state, restrictions ->
-        state.copy(recommendedVideos = ContentRestrictionPolicy.apply(state.recommendedVideos, restrictions))
+    val uiState = combine(_uiState, recommendationFilters) { state, filters ->
+        state.copy(recommendedVideos = filters.apply(state.recommendedVideos))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
     val settingsState: StateFlow<AppSettings> = settingsRepository.settingsFlow
@@ -95,15 +100,15 @@ class HomeViewModel @Inject constructor(
 
     private val recommendationRefresh = MutableStateFlow(0)
     private val personalized = MutableStateFlow(PersonalizedUiState())
-    val personalizedState = combine(personalized, libraryPreferences.restrictions) { state, restrictions ->
-        state.copy(videos = ContentRestrictionPolicy.apply(state.videos, restrictions),
-            musicVideos = ContentRestrictionPolicy.apply(state.musicVideos, restrictions),
-            popularMusicVideos = ContentRestrictionPolicy.apply(state.popularMusicVideos, restrictions))
+    val personalizedState = combine(personalized, recommendationFilters) { state, filters ->
+        state.copy(videos = filters.apply(state.videos),
+            musicVideos = filters.apply(state.musicVideos),
+            popularMusicVideos = filters.apply(state.popularMusicVideos))
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PersonalizedUiState())
-    val autoMixes = combine(personalized, libraryPreferences.editedMixes, libraryPreferences.restrictions, settingsState) { state, edits, restrictions, settings ->
+    val autoMixes = combine(personalized, libraryPreferences.editedMixes, recommendationFilters, settingsState) { state, edits, filters, settings ->
         val saved = edits.filter { it.id.startsWith("${settings.activeSourceType.name}:") }
         val generated = state.autoMixes.filterNot { mix -> saved.any { it.id == mix.id } }.map { mix ->
-            mix.copy(videos = ContentRestrictionPolicy.apply(mix.videos, restrictions))
+            mix.copy(videos = filters.apply(mix.videos))
         }.filter { it.videos.size >= 3 }
         saved + generated
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -140,9 +145,6 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            libraryPreferences.restrictions.drop(1).collect { recommendationRefresh.value++ }
-        }
-        viewModelScope.launch {
             settingsRepository.settingsFlow
                 .distinctUntilChangedBy { it.activeSourceType }
                 .collectLatest { settings ->
@@ -150,42 +152,31 @@ class HomeViewModel @Inject constructor(
                 }
         }
         viewModelScope.launch {
-            val profileInputs = combine(
-                personalizedRecommendations.history.debounce(2_000L),
-                personalizedRecommendations.favorites,
-                personalizedRecommendations.playlistVideos,
-                personalizedRecommendations.searchHistory
-            ) { history, favorites, playlists, searches ->
-                RecommendationInputs(history, favorites, playlists, searches)
-            }
-            val activeSource = combine(
+            var previousSource: ContentSourceType? = null
+            // Only first load, an explicit page refresh or a source switch requests a new
+            // recommendation snapshot. History is persisted every few seconds while playing.
+            combine(
                 settingsRepository.settingsFlow.map { it.activeSourceType }.distinctUntilChanged(),
                 recommendationRefresh
             ) { source, _ -> source }
-            combine(
-                profileInputs,
-                activeSource,
-                playbackController.playbackState.map { state ->
-                    Triple(
-                        state.currentVideo,
-                        state.currentDetail?.description.orEmpty(),
-                        state.queue.radioMode || state.queue.autoRadioAfterEnd
-                    )
-                }.distinctUntilChangedBy { (video, description, isMusic) ->
-                    "${video?.sourceType}:${video?.id}:${video?.title}:$description:$isMusic"
-                }
-            ) { profile, source, playbackContext -> profile.copy(
-                source = source,
-                currentVideo = playbackContext.first,
-                currentDescription = playbackContext.second,
-                currentIsMusic = playbackContext.third
-            ) }
-                .collectLatest { input ->
-                    personalized.value = PersonalizedUiState()
+                .collectLatest { source ->
+                    val sourceChanged = previousSource != source
+                    previousSource = source
+                    personalized.update { if (sourceChanged) PersonalizedUiState() else it.copy(loading = true) }
                     val result = try {
+                        val input = combine(
+                            personalizedRecommendations.history,
+                            personalizedRecommendations.favorites,
+                            personalizedRecommendations.playlistVideos,
+                            personalizedRecommendations.searchHistory
+                        ) { history, favorites, playlists, searches ->
+                            RecommendationInputs(history, favorites, playlists, searches)
+                        }.first()
+                        val playback = playbackController.playbackState.value
                         personalizedRecommendations.recommendations(
                             input.history, input.favorites, input.playlists, input.searches,
-                            input.source, input.currentVideo, input.currentDescription, input.currentIsMusic
+                            source, playback.currentVideo, playback.currentDetail?.description.orEmpty(),
+                            playback.queue.radioMode || playback.queue.autoRadioAfterEnd
                         )
                     } catch (cancelled: CancellationException) { throw cancelled }
                     catch (error: Exception) {
@@ -319,7 +310,6 @@ class HomeViewModel @Inject constructor(
                     catch (_: Exception) { notice.value = "Chưa lưu được lựa chọn. Hãy thử lại." }
                 }
             }
-            recommendationRefresh.value++
         }
     }
 
@@ -380,13 +370,20 @@ class HomeViewModel @Inject constructor(
     }
 }
 
+/** Explicit feedback filters the displayed snapshot; it never starts another network load. */
+private data class HomeRecommendationFilters(
+    val restrictions: List<ContentRestrictionEntity>,
+    val hiddenVideos: Set<String>,
+    val blockedChannels: Set<String>
+) {
+    fun apply(videos: List<VideoItem>): List<VideoItem> = ContentRestrictionPolicy.apply(videos.filterNot {
+        RecommendationRanking.stableKey(it) in hiddenVideos || RecommendationRanking.normalize(it.channelName) in blockedChannels
+    }, restrictions)
+}
+
 private data class RecommendationInputs(
     val history: List<HistoryEntity>,
     val favorites: List<com.aeroplay.app.core.database.FavoriteEntity>,
     val playlists: List<com.aeroplay.app.core.database.PlaylistVideoEntity>,
-    val searches: List<com.aeroplay.app.core.database.SearchHistoryEntity>,
-    val source: ContentSourceType = ContentSourceType.DEMO_LOCAL,
-    val currentVideo: VideoItem? = null,
-    val currentDescription: String = "",
-    val currentIsMusic: Boolean = false
+    val searches: List<com.aeroplay.app.core.database.SearchHistoryEntity>
 )

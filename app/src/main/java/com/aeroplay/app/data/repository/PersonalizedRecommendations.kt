@@ -238,6 +238,8 @@ class PersonalizedRecommendations @Inject constructor(
     val favorites: Flow<List<FavoriteEntity>> = dao.observeFavorites()
     val searchHistory: Flow<List<SearchHistoryEntity>> = dao.observeSearchHistory()
     val playlistVideos: Flow<List<PlaylistVideoEntity>> = dao.observeAllPlaylistVideos()
+    val feedback = dao.observeRecommendationFeedback()
+    val blockedChannels = dao.observeBlockedRecommendationChannels()
 
     private data class CachedCandidates(
         val at: Long,

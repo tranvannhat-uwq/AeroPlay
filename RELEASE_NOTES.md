@@ -1,3 +1,9 @@
+AeroPlay 2.2.1
+
+- Sửa mục Dành cho bạn tự tải lại khi tiến độ xem được lưu mỗi vài giây. Giữ nguyên danh sách cho đến lần kéo làm mới Trang chủ hoặc đổi nguồn nội dung.
+- Lấy lịch sử, yêu thích, playlist, tìm kiếm và bài đang phát mới nhất khi người dùng làm mới; vẫn lưu tiến độ và cập nhật Tiếp tục xem như trước.
+- Giữ các thẻ hiện có trong lúc làm mới để tránh nhấp nháy. Không quan tâm, Đã xem, chặn kênh và danh sách hạn chế lọc trực tiếp danh sách, không tải lại toàn bộ đề xuất.
+
 AeroPlay 2.2.0
 
 - Thêm Phát ngẫu nhiên cho Lịch sử xem, Trên thiết bị, Yêu thích, toàn bộ playlist đang lọc và từng playlist. Hàng đợi loại mục trùng, cố gắng giãn kênh, tránh lặp ngay bài hiện tại và phát từ đầu.

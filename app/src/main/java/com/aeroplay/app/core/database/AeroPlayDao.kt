@@ -55,6 +55,9 @@ interface AeroPlayDao {
     @Query("SELECT * FROM recommendation_feedback")
     suspend fun getRecommendationFeedback(): List<RecommendationFeedbackEntity>
 
+    @Query("SELECT * FROM recommendation_feedback")
+    fun observeRecommendationFeedback(): Flow<List<RecommendationFeedbackEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertRecommendationFeedback(entity: RecommendationFeedbackEntity)
 
@@ -63,6 +66,9 @@ interface AeroPlayDao {
 
     @Query("SELECT * FROM blocked_recommendation_channels")
     suspend fun getBlockedRecommendationChannels(): List<BlockedRecommendationChannelEntity>
+
+    @Query("SELECT * FROM blocked_recommendation_channels")
+    fun observeBlockedRecommendationChannels(): Flow<List<BlockedRecommendationChannelEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun blockRecommendationChannel(entity: BlockedRecommendationChannelEntity)

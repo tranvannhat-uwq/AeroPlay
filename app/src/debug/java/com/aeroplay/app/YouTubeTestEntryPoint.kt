@@ -19,6 +19,8 @@ interface YouTubeTestEntryPoint {
     fun playlists(): com.aeroplay.app.data.repository.PlaylistRepository
     fun deviceMedia(): com.aeroplay.app.data.repository.DeviceMediaRepository
     fun recommendations(): com.aeroplay.app.data.repository.PersonalizedRecommendations
+    fun extractor(): com.aeroplay.app.data.source.ExperimentalExtractorSource
+    fun remotePlaylists(): com.aeroplay.app.data.repository.RemotePlaylistRepository
     fun database(): com.aeroplay.app.core.database.AeroPlayDatabase
     fun content(): ContentRepository
     fun search(): SearchRepository

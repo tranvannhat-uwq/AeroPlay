@@ -4,7 +4,7 @@
 
 - Trang chủ có mục **Bản phối dành cho bạn** với ảnh ghép từ nội dung thật trong danh sách.
 - Khi chưa có lịch sử/bài nhạc phù hợp, hiển thị **Bản phối khám phá** từ ứng viên của nguồn, không gán nhạc phổ biến thành sở thích đã biết của người nghe.
-- AeroPlay tự nhóm lại khi lịch sử, yêu thích, playlist cục bộ, bài đang phát hoặc kết quả đề xuất thay đổi. Kéo làm mới Trang chủ để yêu cầu tải lại gợi ý theo cơ chế hiện có.
+- Từ 2.2.1, đề xuất và bản phối tự động trên Trang chủ giữ nguyên trong lúc nghe. Lần đầu mở hoặc khi đổi nguồn sẽ tải danh sách; kéo làm mới Trang chủ để lấy lịch sử, yêu thích, playlist, tìm kiếm và bài đang phát mới nhất. Việc lưu tiến độ không tự tải lại đề xuất. Các thao tác phản hồi/hạn chế chỉ lọc danh sách hiện có; bản phối đã sửa vẫn cập nhật sau khi lưu.
 - Tối đa 5 bản phối: sở thích/bài hiện tại, tối đa 3 thể loại và các bài phù hợp có nhiều lượt xem. Mỗi bản phối có 3–25 bài sau khi lọc. Danh sách không đủ 3 bài khác nhau không hiển thị.
 - Thông tin thể loại lấy từ tiêu đề, tên kênh và mô tả; đây là suy luận bằng quy tắc, không phân tích âm thanh và không sử dụng thuật toán/tài khoản cá nhân hóa của YouTube.
 - Ưu tiên bài khác tên, loại các phiên bản được nhận diện là cùng bài, tối đa 2 bài mỗi kênh; giới hạn kênh là gần đúng cho nghệ sĩ, vì một nghệ sĩ có thể xuất hiện trên nhiều kênh.
@@ -36,6 +36,12 @@ Tái sử dụng ứng viên và cache 20 phút của phần đề xuất; việ
 Hai cờ tài khoản/API-only tiếp tục tắt. Các luồng chính thức bị khóa theo cờ hiện có; không sử dụng OAuth để lấy media.
 
 ## Kiểm thử
+
+### Bản sửa 2.2.1 — 17/11/2026
+
+- `HomeRecommendationRefreshTest` dùng Room thật riêng cho kiểm thử: danh sách giữ nguyên qua ba lần ghi tiến độ cách nhau 5 giây, thay đổi yêu thích/playlist/tìm kiếm và ghi nhận tương tác. Làm mới toàn trang mới lấy hồ sơ mới; phản hồi và thêm/gỡ hạn chế chỉ lọc thẻ, không kích hoạt tải lại.
+- 6 kiểm thử Android API 35 đạt: hai tình huống trên, phát ngẫu nhiên trong thư viện, sửa bản phối/quản lý hạn chế, mở/phát bản phối và điều hướng. Unit tests: 65 đạt, 3 bỏ qua. Build Debug/Release và lint thành công (0 lỗi, 111 cảnh báo).
+- Giữ Room phiên bản 5 và hai cờ Google/API-only tắt; chưa kiểm thử bản sửa này trên điện thoại thật.
 
 - `AutoMixPlannerTest`: 6 bài kiểm tra dữ liệu thuật toán: trùng bài/phiên bản, thể loại xung đột, giới hạn kênh, lượt xem thật, nguồn/livestream, tuyển tập dài và nội dung Chuẩn Mở.
 - `AutoMixDeviceTest`: kiểm tra mở thẻ, chọn lại clip có sẵn và thay hàng đợi/resume trên player thực; kiểm tra nguồn YouTube trực tiếp cần tham số instrumentation `liveMix=true`.
