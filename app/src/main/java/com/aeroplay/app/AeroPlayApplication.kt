@@ -9,8 +9,6 @@ import coil.memory.MemoryCache
 import com.aeroplay.app.core.network.NewPipeOkHttpDownloader
 import com.aeroplay.app.data.youtube.YouTubeAccountRepository
 import com.aeroplay.app.playback.widget.PlaybackWidget
-import com.aeroplay.app.playback.widget.WidgetAppearance
-import com.aeroplay.app.playback.widget.WidgetGlassMode
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +57,6 @@ class AeroPlayApplication : Application(), ImageLoaderFactory {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        if (WidgetAppearance.load(this).mode == WidgetGlassMode.ADAPTIVE) PlaybackWidget.redraw(this)
+        PlaybackWidget.redraw(this)
     }
 }

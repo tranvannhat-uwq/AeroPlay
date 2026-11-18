@@ -1,3 +1,10 @@
+AeroPlay 2.2.6
+
+- Widget có nút phát lớn (54–60 dp) và nút chuyển bài 48 dp. Hàng điều khiển giữ các nút chính khi diện tích hẹp.
+- Mặc định giao diện theo hệ thống. Màu chữ đi cùng mặt kính có độ tương phản được bảo vệ, kể cả trên hình nền nhiều chi tiết.
+- Thêm tương phản Cao và màu nhấn Hệ thống, Cyan hoặc Violet trong Cài đặt → Giao diện widget.
+- Tăng cỡ chữ, làm rõ vạch tiến trình và tách phần Tiếp theo bằng một lớp kính nhẹ. Widget tự giảm chi tiết phụ theo kích thước và cỡ chữ.
+
 AeroPlay 2.2.5
 
 - Làm mới widget AeroPlay với ba bố cục 2×2, 4×2 và 4×4, tự đổi khi kéo thay đổi kích thước.

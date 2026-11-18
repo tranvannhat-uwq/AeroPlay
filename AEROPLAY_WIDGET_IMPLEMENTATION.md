@@ -6,7 +6,7 @@ Nhánh triển khai: `codex/pearl-glass-widgets`. APK để xem thử nằm tạ
 
 1. Nhấn giữ chỗ trống trên màn hình chính Android, mở **Tiện ích** và chọn **AeroPlay · Trình phát**.
 2. Kích thước mặc định là **4×2**. Nhấn giữ widget và kéo tay nắm để thu về **2×2** hoặc tăng lên **4×4**. Launcher quyết định số ô và kích thước thực. AeroPlay chọn bố cục theo chiều rộng và chiều cao mà launcher báo.
-3. Trong AeroPlay, vào **Cài đặt → Giao diện widget** để chọn **Pearl Glass Light**, **Neon Glass Dark** hoặc **Theo hệ thống**, rồi chỉnh **Độ đục nền kính** từ 0% đến 100%. Mặc định là 28%. Cài đặt áp dụng cho các widget đã thêm.
+3. Trong AeroPlay, vào **Cài đặt → Giao diện widget** để chọn **Tự động theo hệ thống**, **Pearl Glass Light** hoặc **Neon Glass Dark**. Có thể chỉnh độ đục mong muốn, tương phản Cao và màu nhấn Hệ thống, Cyan hoặc Violet. Cài đặt áp dụng ngay cho các widget đã thêm. Nền có chữ giữ độ đục tối thiểu để đọc được.
 
 ## Bố cục và hành vi
 
@@ -20,9 +20,9 @@ Widget dùng MediaSession và hàng chờ hiện có. Album artwork lấy từ m
 
 ## Lớp kính và chữ
 
-Nền cũ dùng gradient có alpha khoảng 86–93% rồi chồng thêm lớp phản chiếu. Widget mới dùng một ảnh nền drawable với alpha điều chỉnh độc lập, lớp phản chiếu cyan/tím nhẹ và viền 1 dp. Mức 0% bỏ độ phủ của bề mặt và lớp phản chiếu, viền vẫn đánh dấu mép widget. Nút và tag chất lượng có bề mặt riêng để dễ nhận biết.
+Widget dùng một lớp kính thống nhất, có alpha điều chỉnh độc lập, phản chiếu cyan/tím nhẹ và viền 1 dp. Nút và tag chất lượng có bề mặt riêng. Nền 2×2 có thể trong suốt hoàn toàn khi giảm độ đục về 0%. Ở bố cục có chữ, độ đục thực tế được nâng khi cần để bảo vệ khả năng đọc. Tương phản Cao đậm hơn và giảm phản chiếu.
 
-Tên ứng dụng, tiêu đề, tên kênh, thời gian và chữ trong mục Tiếp theo nằm trực tiếp trên kính. Trên hình nền sáng, tiêu đề dùng navy `#142653`, nghệ sĩ dùng `#465A7B`, các mốc thời gian dùng `#516584`. Android 8.1 trở lên cho phép đọc màu chủ đạo do hệ thống báo để chọn chữ sáng khi nền tối. Android 8.0 dùng màu chữ theo chế độ kính. Màu chủ đạo toàn màn hình là một ước lượng, nên hình nền có độ sáng thay đổi mạnh ngay sau chữ có thể cần chỉnh độ đục hoặc chọn chế độ khác.
+Chữ dùng cặp màu của chế độ kính, với navy và xanh xám ở chế độ sáng, trắng và trắng xanh ở chế độ tối. Mức alpha tối thiểu được tính với nền trắng hoặc đen bất lợi và có dự phòng cho phản chiếu, thay cho việc đoán độ sáng tại vị trí widget từ một màu trung bình. Tùy chọn Hệ thống dùng màu nhấn Dynamic Color trên Android 12 trở lên nếu đủ tương phản với thanh tiến trình. Các nút chính giữ 48–60 dp. Bố cục ẩn thông tin phụ và nút phụ khi launcher báo thiếu diện tích hoặc tăng cỡ chữ.
 
 AppWidget hiển thị alpha thật bằng RemoteViews. Drawable mô phỏng phản chiếu và chiều sâu. Launcher vẫn hiển thị hình nền nguyên gốc qua lớp kính, không có hiệu ứng khúc xạ hoặc làm mờ nền động.
 
@@ -36,9 +36,8 @@ AppWidget hiển thị alpha thật bằng RemoteViews. Drawable mô phỏng ph�
 
 ## Kiểm thử
 
-- APK Debug build thành công. Unit suite có 72 trường hợp, 69 chạy qua và 3 bỏ qua.
+- APK Debug 2.2.6 build thành công. Unit suite có 74 trường hợp, 71 chạy qua và 3 bỏ qua, bao gồm kiểm tra tương phản tối thiểu trên màu nền bất lợi và bố cục ở font scale lớn.
 - Pixel Launcher trên emulator Android 15: thêm widget qua trình chọn, kéo giữa ba cỡ, kiểm tra widget rảnh và có phiên phát Media3, ảnh bìa, tiêu đề dài có ellipsis, mốc thời gian và bài tiếp theo. Đã thử Phát, Tạm dừng, Bài sau và Bài trước sau khi bỏ nền chữ. Đã thử Yêu thích, Lặp lại, mở hàng chờ và đổi chế độ kính trong quá trình phát triển.
 - Emulator Android 8.0: cài được APK Debug và hệ thống đăng ký widget. Chưa kéo giãn và thử các nút điều khiển trên launcher ở phiên bản này.
-- Kiểm tra độ đục 0%, 28% và 100%. Một điểm không có chữ hoặc nút tại cùng vị trí cho kết quả `#100F19` ở 0%, `#4D4C57` ở 28% và `#EEEEFD` ở 100%, tương ứng khoảng 28% pha màu ở mức mặc định. Đã kiểm tra bằng cả hình nền sáng và tối trên launcher.
-- Ảnh chụp launcher lưu trong `app/build/verification/widgets/`. Ảnh có tiền tố `final-` là bản đã bỏ nền chữ.
+- Kiểm tra bản 2.2.6 trên Pixel Launcher với hình nền thiên nhiên, chuyển sáng/tối theo hệ thống và cỡ chữ 100%, 130%, 150%. Đã kiểm tra 4×4, 4×2 và kích thước trung gian. Ảnh launcher bản mới có tiền tố `adaptive-2.2.6-` trong `app/build/verification/widgets/`.
 - Còn cần kiểm thử trên điện thoại thật, các launcher OEM, thêm nhiều widget đồng thời, khởi động lại thiết bị, mất mạng kéo dài, mức dùng pin và RAM.

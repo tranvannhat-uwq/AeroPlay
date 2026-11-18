@@ -1,21 +1,18 @@
 package com.aeroplay.app.playback.widget
 
 import android.app.PendingIntent
-import android.app.WallpaperManager
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.util.SizeF
 import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
-import androidx.core.graphics.ColorUtils
 import com.aeroplay.app.MainActivity
 import com.aeroplay.app.R
 import com.aeroplay.app.core.common.FormatUtils
@@ -35,10 +32,37 @@ internal enum class WidgetSize {
     companion object {
         fun fromDp(width: Int, height: Int): WidgetSize = when {
             width >= 240 && height >= 255 -> EXPANDED
-            width >= 211 -> WIDE
+            width >= 211 && height >= 122 -> WIDE
             else -> QUICK
         }
     }
+}
+
+internal data class WidgetLayoutPlan(val width: Int, val height: Int, val fontScale: Float) {
+    val size = WidgetSize.fromDp(width, height)
+    private val fontExtra = ((fontScale - 1f).coerceAtLeast(0f) * 40).toInt()
+    val secondaryControls = size == WidgetSize.EXPANDED && width >= 280
+    val heading = size != WidgetSize.WIDE || height >= 158 + fontExtra
+    val artist = when (size) {
+        WidgetSize.QUICK -> false
+        WidgetSize.WIDE -> height >= 143 + fontExtra
+        WidgetSize.EXPANDED -> height >= 248 + fontExtra / 2
+    }
+    val times = height >= (if (size == WidgetSize.EXPANDED) 267 else 165) + fontExtra
+    val nextItem = height >= 245 + fontExtra
+    val nextArtist = height >= 302 + fontExtra
+    val coverDp = when (size) {
+        WidgetSize.QUICK -> minOf(144, height - 38, width - 24).coerceAtLeast(55)
+        WidgetSize.WIDE ->
+            minOf(88, width / 3, height - (if (heading) 103 else 74) - fontExtra).coerceAtLeast(42)
+        WidgetSize.EXPANDED -> {
+            val chrome = 189 + (if (times) 19 else 0) - (if (nextItem) 0 else 34)
+            minOf(126, width * 39 / 100, height - chrome - fontExtra).coerceAtLeast(58)
+        }
+    }
+    val titleLines = if (size == WidgetSize.EXPANDED && coverDp >= 94 && height >= 310 + fontExtra) 2 else 1
+    val quality = size == WidgetSize.EXPANDED && coverDp >= 88 && height >= 310 + fontExtra
+    val expandedQueueLabel = width >= 266 + fontExtra
 }
 
 internal data class WidgetPlayback(
@@ -138,14 +162,14 @@ class PlaybackWidget : AppWidgetProvider() {
         @Suppress("DEPRECATION")
         private fun updateOne(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
             val appearance = WidgetAppearance.load(context)
-            val darkGlass = appearance.isDark(context)
-            val lightText = useLightText(context, appearance, darkGlass)
+            val colors = AdaptiveWidgetColorScheme.resolve(context, appearance)
+            val fontScale = context.resources.configuration.fontScale
             if (Build.VERSION.SDK_INT >= 31) {
                 val sizes = options.getParcelableArrayList<SizeF>(AppWidgetManager.OPTION_APPWIDGET_SIZES)
                     .orEmpty().distinct().take(16)
                 if (sizes.isNotEmpty()) {
                     manager.updateAppWidget(id, RemoteViews(sizes.associateWith {
-                        render(context, it.width.toInt(), it.height.toInt(), appearance, darkGlass, lightText)
+                        render(context, WidgetLayoutPlan(it.width.toInt(), it.height.toInt(), fontScale), appearance, colors)
                     }))
                     return
                 }
@@ -154,48 +178,35 @@ class PlaybackWidget : AppWidgetProvider() {
             val maxWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minWidth)
             val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120)
             val maxHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minHeight)
-            val portrait = render(context, minWidth, maxHeight, appearance, darkGlass, lightText)
-            val landscape = render(context, maxWidth, minHeight, appearance, darkGlass, lightText)
+            val portrait = render(context, WidgetLayoutPlan(minWidth, maxHeight, fontScale), appearance, colors)
+            val landscape = render(context, WidgetLayoutPlan(maxWidth, minHeight, fontScale), appearance, colors)
             manager.updateAppWidget(id, RemoteViews(landscape, portrait))
-        }
-
-        private fun useLightText(context: Context, appearance: WidgetAppearance, darkGlass: Boolean): Boolean {
-            if (Build.VERSION.SDK_INT < 27) return darkGlass
-            val wallpaper = runCatching {
-                WallpaperManager.getInstance(context).getWallpaperColors(WallpaperManager.FLAG_SYSTEM)?.primaryColor?.toArgb()
-            }.getOrNull() ?: return darkGlass
-            val tint = Color.parseColor(if (darkGlass) "#13203D" else "#ECF2FC")
-            val background = ColorUtils.blendARGB(wallpaper, tint, appearance.opacity / 100f)
-            return ColorUtils.calculateContrast(Color.parseColor("#F1F6FF"), background) >
-                ColorUtils.calculateContrast(Color.parseColor("#142653"), background)
         }
 
         private fun render(
             context: Context,
-            width: Int,
-            height: Int,
+            plan: WidgetLayoutPlan,
             appearance: WidgetAppearance,
-            dark: Boolean,
-            lightText: Boolean
+            colors: AdaptiveWidgetColorScheme
         ): RemoteViews {
             val state = snapshot
-            val size = WidgetSize.fromDp(width, height)
+            val size = plan.size
+            val dark = colors.dark
             val layout = when (size) {
                 WidgetSize.QUICK -> R.layout.playback_widget_small
                 WidgetSize.WIDE -> R.layout.playback_widget
                 WidgetSize.EXPANDED -> R.layout.playback_widget_expanded
             }
             val open = activity(context, ACTION_OPEN_PLAYER)
-            val ink = Color.parseColor(if (lightText) "#F1F6FF" else "#142653")
-            val muted = Color.parseColor(if (lightText) "#DDEAFF" else "#465A7B")
-            val times = Color.parseColor(if (lightText) "#D3E1F8" else "#516584")
-            val buttonInk = Color.parseColor(if (dark) "#F1F6FF" else "#142653")
+            val ink = colors.ink
+            val muted = colors.secondary
             return RemoteViews(context.packageName, layout).apply {
                 setImageViewResource(R.id.widget_glass_fill,
                     if (dark) R.drawable.widget_pearl_dark else R.drawable.widget_pearl_background)
-                setInt(R.id.widget_glass_fill, "setImageAlpha", appearance.fillAlpha)
+                setInt(R.id.widget_glass_fill, "setImageAlpha",
+                    if (size == WidgetSize.QUICK && !appearance.highContrast) appearance.fillAlpha else colors.guardedAlpha)
                 setImageViewResource(R.id.widget_glass_optics, R.drawable.widget_glass_optics)
-                setInt(R.id.widget_glass_optics, "setImageAlpha", appearance.fillAlpha)
+                setInt(R.id.widget_glass_optics, "setImageAlpha", minOf(colors.opticsAlpha, appearance.fillAlpha))
                 setImageViewResource(R.id.widget_glass_edge,
                     if (dark) R.drawable.widget_glass_rim_dark else R.drawable.widget_glass_rim)
                 cover(R.id.widget_art, state.artwork)
@@ -206,53 +217,57 @@ class PlaybackWidget : AppWidgetProvider() {
                 setContentDescription(R.id.widget_toggle, context.getString(
                     if (state.pauseButton) R.string.playback_widget_pause else R.string.playback_widget_play
                 ))
-                setInt(R.id.widget_toggle, "setColorFilter", buttonInk)
+                setInt(R.id.widget_toggle, "setColorFilter", ink)
                 setInt(R.id.widget_toggle, "setBackgroundResource", if (dark) R.drawable.widget_orb_dark else R.drawable.widget_orb)
                 setOnClickPendingIntent(R.id.widget_toggle, if (state.title == null) open else command(context, ACTION_TOGGLE))
                 if (Build.VERSION.SDK_INT >= 31) {
-                    val coverDp = when (size) {
-                        WidgetSize.QUICK -> minOf(144, height - 33, width - 24).coerceAtLeast(56)
-                        WidgetSize.WIDE -> minOf(96, height - 28, width - 146).coerceAtLeast(61)
-                        WidgetSize.EXPANDED -> minOf(130, width * 43 / 100, height - 166).coerceAtLeast(86)
-                    }
-                    setViewLayoutWidth(R.id.widget_art_frame, coverDp.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
-                    setViewLayoutHeight(R.id.widget_art_frame, coverDp.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
+                    setViewLayoutWidth(R.id.widget_art_frame, plan.coverDp.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
+                    setViewLayoutHeight(R.id.widget_art_frame, plan.coverDp.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
                 }
                 if (size != WidgetSize.QUICK) {
                     val subtitle = state.status?.let(context::getString) ?: state.artist
+                    setViewVisibility(R.id.widget_heading, if (plan.heading) View.VISIBLE else View.GONE)
                     setTextViewText(R.id.widget_track, state.title ?: context.getString(R.string.playback_widget_idle))
+                    setInt(R.id.widget_track, "setMaxLines", plan.titleLines)
                     setTextViewText(R.id.widget_artist, subtitle)
-                    val showArtist = subtitle.isNotBlank() && (size == WidgetSize.EXPANDED || height >= 108)
+                    val showArtist = subtitle.isNotBlank() && plan.artist
                     setViewVisibility(R.id.widget_artist, if (showArtist) View.VISIBLE else View.GONE)
                     setTextColor(R.id.widget_track, ink)
                     setTextColor(R.id.widget_brand, ink)
                     setTextColor(R.id.widget_artist, muted)
-                    setTextColor(R.id.widget_elapsed, times)
-                    setTextColor(R.id.widget_duration, times)
+                    setTextColor(R.id.widget_elapsed, muted)
+                    setTextColor(R.id.widget_duration, muted)
                     val duration = state.durationMs
-                    val showProgress = duration != null && (size == WidgetSize.EXPANDED || height >= 122)
-                    val minHeightForTimes = if (size == WidgetSize.EXPANDED) 265 else 142
-                    val showTimes = showProgress && height >= minHeightForTimes
+                    val showProgress = duration != null
+                    val showTimes = showProgress && plan.times
                     setViewVisibility(R.id.widget_progress, if (showProgress) View.VISIBLE else View.GONE)
                     setViewVisibility(R.id.widget_times, if (showTimes) View.VISIBLE else View.GONE)
                     if (duration != null) {
-                        setProgressBar(R.id.widget_progress, 1000, (1000.0 * state.positionMs / duration).toInt().coerceIn(0, 1000), false)
+                        setInt(R.id.widget_progress_rail, "setColorFilter", colors.rail)
+                        setInt(R.id.widget_progress_fill, "setColorFilter", colors.accent)
+                        setInt(R.id.widget_progress_fill, "setImageLevel",
+                            (10000.0 * state.positionMs / duration).toInt().coerceIn(0, 10000))
+                        setContentDescription(R.id.widget_progress, context.getString(
+                            R.string.playback_widget_progress,
+                            FormatUtils.formatMillis(state.positionMs), FormatUtils.formatMillis(duration)
+                        ))
                         setTextViewText(R.id.widget_elapsed, FormatUtils.formatMillis(state.positionMs))
                         setTextViewText(R.id.widget_duration, FormatUtils.formatMillis(duration))
                     }
                     setOnClickPendingIntent(R.id.widget_progress, open)
-                    control(context, R.id.widget_previous, ACTION_PREVIOUS, state.hasPrevious, buttonInk, dark)
-                    control(context, R.id.widget_next, ACTION_NEXT, state.hasNext, buttonInk, dark)
+                    control(context, R.id.widget_previous, ACTION_PREVIOUS, state.hasPrevious, ink, dark)
+                    control(context, R.id.widget_next, ACTION_NEXT, state.hasNext, ink, dark)
                 }
                 if (size == WidgetSize.EXPANDED) {
                     setTextViewText(R.id.widget_quality, state.quality.orEmpty())
-                    setViewVisibility(R.id.widget_quality, if (state.quality == null) View.GONE else View.VISIBLE)
-                    setTextColor(R.id.widget_quality, buttonInk)
+                    setViewVisibility(R.id.widget_quality, if (state.quality == null || !plan.quality) View.GONE else View.VISIBLE)
+                    setTextColor(R.id.widget_quality, ink)
                     val panel = if (dark) R.drawable.widget_button_dark else R.drawable.widget_button
                     setInt(R.id.widget_quality, "setBackgroundResource", panel)
-                    val accent = Color.parseColor(if (dark) "#CAB8FF" else "#6847CF")
-                    control(context, R.id.widget_favorite, ACTION_FAVORITE, state.video != null, if (state.favorite) accent else buttonInk, dark)
-                    control(context, R.id.widget_repeat, ACTION_REPEAT, state.canRepeat, if (state.repeat) accent else buttonInk, dark)
+                    setViewVisibility(R.id.widget_favorite, if (plan.secondaryControls) View.VISIBLE else View.GONE)
+                    setViewVisibility(R.id.widget_repeat, if (plan.secondaryControls) View.VISIBLE else View.GONE)
+                    control(context, R.id.widget_favorite, ACTION_FAVORITE, state.video != null, if (state.favorite) colors.accent else ink, dark, state.favorite)
+                    control(context, R.id.widget_repeat, ACTION_REPEAT, state.canRepeat, if (state.repeat) colors.accent else ink, dark, state.repeat)
                     setContentDescription(R.id.widget_favorite, context.getString(
                         if (state.favorite) R.string.playback_widget_unfavorite else R.string.playback_widget_favorite
                     ))
@@ -262,9 +277,16 @@ class PlaybackWidget : AppWidgetProvider() {
                     setTextColor(R.id.widget_next_header, ink)
                     setTextColor(R.id.widget_next_title, ink)
                     setTextColor(R.id.widget_next_artist, muted)
+                    setInt(R.id.widget_up_next, "setBackgroundResource",
+                        if (dark) R.drawable.widget_queue_surface_dark else R.drawable.widget_queue_surface)
                     setTextColor(R.id.widget_open_queue, muted)
+                    setTextViewText(R.id.widget_open_queue, context.getString(
+                        if (plan.expandedQueueLabel) R.string.playback_widget_open_queue else R.string.playback_widget_queue_short
+                    ))
+                    setContentDescription(R.id.widget_open_queue, context.getString(R.string.playback_widget_open_queue))
+                    setViewVisibility(R.id.widget_next_artist, if (plan.nextArtist) View.VISIBLE else View.GONE)
                     setOnClickPendingIntent(R.id.widget_up_next, activity(context, ACTION_OPEN_QUEUE))
-                    setViewVisibility(R.id.widget_next_item, if (state.next == null) View.GONE else View.VISIBLE)
+                    setViewVisibility(R.id.widget_next_item, if (state.next == null || !plan.nextItem) View.GONE else View.VISIBLE)
                     setTextViewText(R.id.widget_next_header, context.getString(
                         if (state.title != null && state.next == null) R.string.playback_widget_no_next else R.string.playback_widget_up_next
                     ))
@@ -280,11 +302,17 @@ class PlaybackWidget : AppWidgetProvider() {
             else setImageViewBitmap(id, bitmap)
         }
 
-        private fun RemoteViews.control(context: Context, id: Int, action: String, enabled: Boolean, ink: Int, dark: Boolean) {
+        private fun RemoteViews.control(context: Context, id: Int, action: String, enabled: Boolean,
+            ink: Int, dark: Boolean, active: Boolean = false) {
             setOnClickPendingIntent(id, if (enabled) command(context, action) else null)
             setInt(id, "setColorFilter", ink)
-            setInt(id, "setImageAlpha", if (enabled) 255 else 85)
-            setInt(id, "setBackgroundResource", if (dark) R.drawable.widget_button_dark else R.drawable.widget_button)
+            setInt(id, "setImageAlpha", if (enabled) 255 else 106)
+            setInt(id, "setBackgroundResource", when {
+                dark && active -> R.drawable.widget_orb_dark
+                active -> R.drawable.widget_orb
+                dark -> R.drawable.widget_button_dark
+                else -> R.drawable.widget_button
+            })
         }
 
         private fun activity(context: Context, action: String): PendingIntent = PendingIntent.getActivity(

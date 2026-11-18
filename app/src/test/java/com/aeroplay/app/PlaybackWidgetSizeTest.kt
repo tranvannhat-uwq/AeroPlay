@@ -2,7 +2,12 @@ package com.aeroplay.app
 
 import com.aeroplay.app.playback.widget.WidgetSize
 import com.aeroplay.app.playback.widget.WidgetAppearance
+import com.aeroplay.app.playback.widget.AdaptiveWidgetColorScheme
+import com.aeroplay.app.playback.widget.WidgetAccent
+import com.aeroplay.app.playback.widget.WidgetLayoutPlan
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 class PlaybackWidgetSizeTest {
@@ -12,7 +17,8 @@ class PlaybackWidgetSizeTest {
     }
 
     @Test fun mediumWidthsAndShortHostsUseHorizontalLayout() {
-        assertEquals(WidgetSize.WIDE, WidgetSize.fromDp(211, 105))
+        assertEquals(WidgetSize.QUICK, WidgetSize.fromDp(211, 105))
+        assertEquals(WidgetSize.WIDE, WidgetSize.fromDp(211, 122))
         assertEquals(WidgetSize.WIDE, WidgetSize.fromDp(320, 124))
         assertEquals(WidgetSize.WIDE, WidgetSize.fromDp(239, 300))
     }
@@ -28,5 +34,28 @@ class PlaybackWidgetSizeTest {
         assertEquals(0, WidgetAppearance(opacity = 0).fillAlpha)
         assertEquals(89, WidgetAppearance(opacity = 35).fillAlpha)
         assertEquals(255, WidgetAppearance(opacity = 100).fillAlpha)
+    }
+
+    @Test fun textAndProgressRemainReadableAgainstAdverseWallpaper() {
+        for (dark in listOf(false, true)) {
+            for (accent in WidgetAccent.entries) {
+                val appearance = WidgetAppearance(opacity = 0, accent = accent)
+                val theme = AdaptiveWidgetColorScheme.create(dark, appearance, dynamic = 0xFF888888.toInt())
+                val worst = AdaptiveWidgetColorScheme.worstSurface(dark, theme.guardedAlpha)
+                assertTrue(AdaptiveWidgetColorScheme.contrast(theme.ink, worst) >= 4.5)
+                assertTrue(AdaptiveWidgetColorScheme.contrast(theme.secondary, worst) >= 4.5)
+                assertTrue(AdaptiveWidgetColorScheme.contrast(theme.accent, theme.rail) >= 3.0)
+                val high = AdaptiveWidgetColorScheme.create(dark, appearance.copy(highContrast = true))
+                assertTrue(high.guardedAlpha > theme.guardedAlpha)
+                assertEquals(0, high.opticsAlpha)
+            }
+        }
+    }
+
+    @Test fun narrowAndLargeFontHostsTrimSupplementaryContent() {
+        assertFalse(WidgetLayoutPlan(268, 280, 1f).secondaryControls)
+        assertTrue(WidgetLayoutPlan(290, 290, 1f).secondaryControls)
+        assertEquals(1, WidgetLayoutPlan(290, 310, 1.5f).titleLines)
+        assertFalse(WidgetLayoutPlan(255, 151, 1.5f).times)
     }
 }

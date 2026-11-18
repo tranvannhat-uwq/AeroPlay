@@ -72,6 +72,7 @@ import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.ThemeMode
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import com.aeroplay.app.playback.widget.WidgetAppearance
+import com.aeroplay.app.playback.widget.WidgetAccent
 import com.aeroplay.app.playback.widget.WidgetGlassMode
 import com.aeroplay.app.updates.UpdateSettingsCard
 import kotlin.math.roundToInt
@@ -90,6 +91,16 @@ fun SettingsScreen(
     val widgetContext = context.applicationContext
     var widgetMode by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).mode.name) }
     var widgetOpacity by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).opacity.toFloat()) }
+    var widgetHighContrast by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).highContrast) }
+    var widgetAccent by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).accent.name) }
+    fun saveWidgetAppearance() {
+        WidgetAppearance(
+            mode = WidgetGlassMode.valueOf(widgetMode),
+            opacity = widgetOpacity.roundToInt(),
+            highContrast = widgetHighContrast,
+            accent = WidgetAccent.valueOf(widgetAccent)
+        ).save(widgetContext)
+    }
 
     var showOpenSourceLicenses by remember { mutableStateOf(false) }
     var showLimitationsModal by remember { mutableStateOf(false) }
@@ -248,26 +259,47 @@ fun SettingsScreen(
                                 selected = widgetMode == mode.name,
                                 onClick = {
                                     widgetMode = mode.name
-                                    WidgetAppearance(mode, widgetOpacity.roundToInt()).save(widgetContext)
+                                    saveWidgetAppearance()
                                 },
                                 label = { Text(mode.label) }
                             )
                         }
                     }
-                    Text("Độ đục nền kính · ${widgetOpacity.roundToInt()}%", style = MaterialTheme.typography.titleSmall)
+                    Text("Độ đục nền mong muốn · ${widgetOpacity.roundToInt()}%", style = MaterialTheme.typography.titleSmall)
                     Slider(
                         value = widgetOpacity,
                         onValueChange = { widgetOpacity = it },
                         valueRange = 0f..100f,
-                        onValueChangeFinished = {
-                            WidgetAppearance(WidgetGlassMode.valueOf(widgetMode), widgetOpacity.roundToInt()).save(widgetContext)
-                        }
+                        onValueChangeFinished = { saveWidgetAppearance() }
                     )
                     Text(
-                        "0% trong suốt · 100% đục",
+                        "Widget có chữ tự tăng độ đậm khi cần để dễ đọc.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(10.dp))
+                    Text("Tương phản", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for ((enabled, label) in listOf(false to "Tự động", true to "Cao")) {
+                            FilterChip(
+                                selected = widgetHighContrast == enabled,
+                                onClick = { widgetHighContrast = enabled; saveWidgetAppearance() },
+                                label = { Text(label) }
+                            )
+                        }
+                    }
+                    Text("Màu nhấn", style = MaterialTheme.typography.titleSmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WidgetAccent.entries.forEach { accent ->
+                            FilterChip(
+                                selected = widgetAccent == accent.name,
+                                onClick = { widgetAccent = accent.name; saveWidgetAppearance() },
+                                label = { Text(accent.label) }
+                            )
+                        }
+                    }
+                    Text("Bố cục tự đổi theo kích thước widget", style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }

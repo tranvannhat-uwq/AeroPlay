@@ -15,6 +15,8 @@
     <string name="playback_widget_up_next">Tiếp theo</string>
     <string name="playback_widget_no_next">Hết hàng chờ</string>
     <string name="playback_widget_open_queue">Xem hàng chờ ›</string>
+    <string name="playback_widget_queue_short">Hàng chờ ›</string>
+    <string name="playback_widget_progress">Đã phát %1$s trên %2$s. Mở trình phát.</string>
     <string name="playback_widget_loading">Đang tải</string>
     <string name="playback_widget_unavailable">Không phát được</string>
 </resources>
