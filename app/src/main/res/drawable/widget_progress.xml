@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background">
+        <shape xmlns:android="http://schemas.android.com/apk/res/android">
+            <corners android:radius="6dp" />
+            <solid android:color="@color/widget_track_line" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress">
+        <clip>
+            <shape xmlns:android="http://schemas.android.com/apk/res/android">
+                <corners android:radius="6dp" />
+                <gradient android:angle="0" android:startColor="#FF22D7E7" android:centerColor="#FF418AF2" android:endColor="#FFA48EF4" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

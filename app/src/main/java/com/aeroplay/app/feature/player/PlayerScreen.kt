@@ -46,6 +46,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,6 +97,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -137,13 +139,16 @@ import androidx.compose.material.icons.filled.Block
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 
 @Composable
 fun FullPlayerOverlay(
     viewModel: PlayerViewModel,
     videoOutput: PlayerVideoOutput,
     onEnterPip: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    openQueue: Boolean = false,
+    onQueueOpened: () -> Unit = {}
 ) {
     val state by viewModel.playbackState.collectAsStateWithLifecycle()
     val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
@@ -217,6 +222,20 @@ fun FullPlayerOverlay(
     val immersive = isLandscapeFullscreen && state.isFullPlayerOpen && !state.isInPipMode
     var touchLockRequested by rememberSaveable { mutableStateOf(false) }
     val isTouchLocked = immersive && touchLockRequested
+    val detailsScroll = rememberLazyListState()
+    val nextList = state.queue.items.drop(state.queue.currentIndex + 1).filter { it.id != currentVideo.id }
+    LaunchedEffect(openQueue, isLandscapeFullscreen, isTouchLocked, state.isFullPlayerOpen, nextList.size) {
+        if (!openQueue || !state.isFullPlayerOpen) return@LaunchedEffect
+        if (isTouchLocked || nextList.isEmpty()) {
+            onQueueOpened()
+        } else if (isLandscapeFullscreen) {
+            exitLandscape()
+        } else {
+            val total = snapshotFlow { detailsScroll.layoutInfo.totalItemsCount }.first { it > nextList.size }
+            detailsScroll.scrollToItem(total - nextList.size - 1)
+            onQueueOpened()
+        }
+    }
     LaunchedEffect(immersive) {
         if (!immersive) touchLockRequested = false
     }
@@ -735,6 +754,7 @@ fun FullPlayerOverlay(
             // 2. Metadata, Action Chips, Error Banner, and Related Videos (Hidden in fullscreen landscape)
             if (!isLandscapeFullscreen) {
                 LazyColumn(
+                    state = detailsScroll,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -907,7 +927,6 @@ fun FullPlayerOverlay(
                     }
 
                     // Show the same ordered queue that powers Next and automatic playback.
-                    val nextList = state.queue.items.drop(state.queue.currentIndex + 1)
                     if (nextList.isNotEmpty()) {
                         item {
                             Text(
@@ -918,7 +937,7 @@ fun FullPlayerOverlay(
                         }
 
                         items(
-                            items = nextList.filter { it.id != currentVideo.id },
+                            items = nextList,
                             key = { "rel_${it.sourceType.name}_${it.id}" }
                         ) { item ->
                             CompactVideoRowCard(

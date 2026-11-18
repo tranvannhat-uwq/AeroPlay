@@ -44,6 +44,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -53,6 +54,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +71,10 @@ import com.aeroplay.app.BuildConfig
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.ThemeMode
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
+import com.aeroplay.app.playback.widget.WidgetAppearance
+import com.aeroplay.app.playback.widget.WidgetGlassMode
 import com.aeroplay.app.updates.UpdateSettingsCard
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -82,6 +87,9 @@ fun SettingsScreen(
     val accountViewModel: YouTubeAccountViewModel = hiltViewModel()
     val youtubeAccount by accountViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val widgetContext = context.applicationContext
+    var widgetMode by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).mode.name) }
+    var widgetOpacity by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).opacity.toFloat()) }
 
     var showOpenSourceLicenses by remember { mutableStateOf(false) }
     var showLimitationsModal by remember { mutableStateOf(false) }
@@ -227,6 +235,39 @@ fun SettingsScreen(
                             }
                         )
                     }
+                }
+            }
+        }
+
+        item {
+            SettingsGroupCard(title = "Giao diện widget") {
+                Column {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        WidgetGlassMode.entries.forEach { mode ->
+                            FilterChip(
+                                selected = widgetMode == mode.name,
+                                onClick = {
+                                    widgetMode = mode.name
+                                    WidgetAppearance(mode, widgetOpacity.roundToInt()).save(widgetContext)
+                                },
+                                label = { Text(mode.label) }
+                            )
+                        }
+                    }
+                    Text("Độ đục nền kính · ${widgetOpacity.roundToInt()}%", style = MaterialTheme.typography.titleSmall)
+                    Slider(
+                        value = widgetOpacity,
+                        onValueChange = { widgetOpacity = it },
+                        valueRange = 0f..100f,
+                        onValueChangeFinished = {
+                            WidgetAppearance(WidgetGlassMode.valueOf(widgetMode), widgetOpacity.roundToInt()).save(widgetContext)
+                        }
+                    )
+                    Text(
+                        "0% trong suốt · 100% đục",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }

@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -72,6 +73,7 @@ import com.aeroplay.app.feature.home.HomeViewModel
 import com.aeroplay.app.feature.library.LibraryScreen
 import com.aeroplay.app.feature.library.LibraryViewModel
 import com.aeroplay.app.feature.player.FullPlayerOverlay
+import com.aeroplay.app.playback.widget.PlaybackWidget
 import com.aeroplay.app.feature.player.MiniPlayerBar
 import com.aeroplay.app.feature.player.PlayerVideoOutput
 import com.aeroplay.app.feature.player.PlayerViewModel
@@ -125,6 +127,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) {
             handleSharedVideos(intent)
             handleMediaSearch(intent)
+            handleWidgetIntent(intent)
         }
 
         val filter = IntentFilter(PipController.ACTION_PIP_TOGGLE_PLAY)
@@ -168,6 +171,8 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 AeroPlayAppRoot(
+                    openWidgetQueue = widgetQueueRequested.value,
+                    onWidgetQueueOpened = { widgetQueueRequested.value = false },
                     openDeviceLibrary = showDeviceLibrary,
                     onDeviceLibraryOpened = { deviceLibraryRequested.value = false },
                     isOffline = networkType == NetworkConnectionType.OFFLINE,
@@ -201,6 +206,19 @@ class MainActivity : ComponentActivity() {
         setIntent(intent)
         handleSharedVideos(intent)
         handleMediaSearch(intent)
+        handleWidgetIntent(intent)
+    }
+
+    private val widgetQueueRequested = mutableStateOf(false)
+
+    private fun handleWidgetIntent(intent: Intent?) {
+        when (intent?.action) {
+            PlaybackWidget.ACTION_OPEN_PLAYER -> playbackController.expandToFullPlayer()
+            PlaybackWidget.ACTION_OPEN_QUEUE -> {
+                widgetQueueRequested.value = playbackController.playbackState.value.currentVideo != null
+                playbackController.expandToFullPlayer()
+            }
+        }
     }
 
     private fun handleMediaSearch(intent: Intent?) {
@@ -282,6 +300,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun AeroPlayAppRoot(
+    openWidgetQueue: Boolean,
+    onWidgetQueueOpened: () -> Unit,
     isOffline: Boolean,
     onEnterPip: () -> Unit,
     openDeviceLibrary: Boolean,
@@ -433,6 +453,8 @@ private fun AeroPlayAppRoot(
                 modifier = Modifier.fillMaxSize()
             ) {
                 FullPlayerOverlay(
+                    openQueue = openWidgetQueue,
+                    onQueueOpened = onWidgetQueueOpened,
                     viewModel = playerViewModel,
                     videoOutput = videoOutput,
                     onEnterPip = onEnterPip,

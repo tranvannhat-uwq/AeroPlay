@@ -3,8 +3,18 @@
     <string name="playback_widget_name">AeroPlay · Trình phát</string>
     <string name="playback_widget_description">Điều khiển AeroPlay từ màn hình chính.</string>
     <string name="playback_widget_idle">Mở AeroPlay để phát</string>
+    <string name="playback_widget_open_player">Mở trình phát AeroPlay</string>
     <string name="playback_widget_play">Phát</string>
     <string name="playback_widget_pause">Tạm dừng</string>
     <string name="playback_widget_previous">Bài trước</string>
     <string name="playback_widget_next">Bài sau</string>
+    <string name="playback_widget_favorite">Yêu thích</string>
+    <string name="playback_widget_unfavorite">Bỏ yêu thích</string>
+    <string name="playback_widget_repeat">Lặp lại bài này</string>
+    <string name="playback_widget_repeat_off">Tắt lặp lại</string>
+    <string name="playback_widget_up_next">Tiếp theo</string>
+    <string name="playback_widget_no_next">Hết hàng chờ</string>
+    <string name="playback_widget_open_queue">Xem hàng chờ ›</string>
+    <string name="playback_widget_loading">Đang tải</string>
+    <string name="playback_widget_unavailable">Không phát được</string>
 </resources>

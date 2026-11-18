@@ -1,3 +1,10 @@
+AeroPlay 2.2.5
+
+- Làm mới widget AeroPlay với ba bố cục 2×2, 4×2 và 4×4, tự đổi khi kéo thay đổi kích thước.
+- Thêm Pearl Glass Light, Neon Glass Dark và Theo hệ thống. Chỉnh độ đục nền kính từ 0% đến 100% trong Cài đặt → Giao diện widget, mặc định 28%.
+- Bỏ nền riêng sau tên AeroPlay, tiêu đề, nghệ sĩ và thời gian. Chữ hiển thị trực tiếp trên lớp kính, với màu phù hợp hình nền khi Android cung cấp màu chủ đạo.
+- Hiển thị ảnh bìa thật, tiến trình, chất lượng và bài kế tiếp khi có dữ liệu. Widget dùng hàng chờ và phiên phát hiện tại để phát, tạm dừng và chuyển bài.
+
 AeroPlay 2.2.4
 
 - Chuyển bài trước hoặc sau từ thanh thông báo và màn hình khóa khi AeroPlay đang phát nền. Các nút dùng hàng chờ hiện tại.

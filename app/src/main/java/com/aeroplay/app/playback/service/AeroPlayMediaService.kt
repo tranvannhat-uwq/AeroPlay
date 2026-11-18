@@ -41,6 +41,7 @@ import com.aeroplay.app.data.repository.PlaybackRepository
 import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import com.aeroplay.app.playback.widget.PlaybackWidget
+import com.aeroplay.app.playback.widget.WidgetPublisher
 import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.*
 import kotlinx.coroutines.guava.future
@@ -372,16 +373,24 @@ class AeroPlayMediaService : MediaLibraryService() {
             .build()
 
         player = exoPlayer
+        val widgets = WidgetPublisher(
+            applicationContext, sessionPlayer, serviceScope, historyRepository,
+            queue = { playbackRepository.activeQueue.value },
+            playback = { phonePlayback.get().playbackState.value }
+        )
         sessionPlayer.addListener(object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) {
-                PlaybackWidget.updateFromPlayer(this@AeroPlayMediaService, player)
+                widgets.refresh()
             }
         })
         serviceScope.launch {
             playbackRepository.activeQueue.collect {
                 sessionPlayer.onQueueChanged()
-                PlaybackWidget.updateFromPlayer(this@AeroPlayMediaService, sessionPlayer)
+                widgets.refresh()
             }
+        }
+        serviceScope.launch {
+            PlaybackWidget.hostChanges.collect { widgets.refresh() }
         }
         serviceScope.launch {
             if (settingsRepository.getSettingsSnapshot().stableVolumeEnabled && exoPlayer.audioSessionId > 0) {
@@ -394,6 +403,7 @@ class AeroPlayMediaService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
         return mediaSession
     }
+
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val currentPlayer = player
