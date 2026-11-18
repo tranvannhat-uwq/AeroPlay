@@ -40,6 +40,8 @@ class SettingsRepositoryImpl @Inject constructor(
         val PIP_ENABLED = booleanPreferencesKey("pip_enabled")
         val BG_PLAYBACK = booleanPreferencesKey("background_playback_enabled")
         val AUTO_SIMILAR_MUSIC = booleanPreferencesKey("auto_play_similar_music")
+        val AMBIENT_LIGHTING = booleanPreferencesKey("ambient_lighting_enabled")
+        val STABLE_VOLUME = booleanPreferencesKey("stable_volume_enabled")
         val API_SOURCE_SELECTED = booleanPreferencesKey("youtube_api_source_selected_v1")
         val PLAYER_SOURCE_SELECTED = booleanPreferencesKey("youtube_player_source_selected_v1")
     }
@@ -68,7 +70,9 @@ class SettingsRepositoryImpl @Inject constructor(
             pauseOnHeadphoneDisconnect = prefs[Keys.PAUSE_HEADPHONE] ?: true,
             pipEnabled = prefs[Keys.PIP_ENABLED] ?: true,
             backgroundPlaybackEnabled = prefs[Keys.BG_PLAYBACK] ?: true,
-            autoPlaySimilarMusic = prefs[Keys.AUTO_SIMILAR_MUSIC] ?: true
+            autoPlaySimilarMusic = prefs[Keys.AUTO_SIMILAR_MUSIC] ?: true,
+            ambientLightingEnabled = prefs[Keys.AMBIENT_LIGHTING] ?: false,
+            stableVolumeEnabled = prefs[Keys.STABLE_VOLUME] ?: false
         )
     }
 
@@ -119,5 +123,13 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setAutoPlaySimilarMusic(enabled: Boolean) {
         context.aeroPlayDataStore.edit { it[Keys.AUTO_SIMILAR_MUSIC] = enabled }
+    }
+
+    override suspend fun setAmbientLightingEnabled(enabled: Boolean) {
+        context.aeroPlayDataStore.edit { it[Keys.AMBIENT_LIGHTING] = enabled }
+    }
+
+    override suspend fun setStableVolumeEnabled(enabled: Boolean) {
+        context.aeroPlayDataStore.edit { it[Keys.STABLE_VOLUME] = enabled }
     }
 }

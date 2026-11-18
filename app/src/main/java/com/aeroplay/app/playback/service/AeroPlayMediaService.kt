@@ -3,8 +3,13 @@ package com.aeroplay.app.playback.service
 import android.app.PendingIntent
 import android.content.Intent
 import android.net.Uri
+import android.media.audiofx.AudioEffect
+import android.media.audiofx.DynamicsProcessing
+import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.annotation.OptIn
+import androidx.annotation.RequiresApi
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -33,6 +38,7 @@ import com.aeroplay.app.playback.car.CarMediaLibrary
 import com.aeroplay.app.playback.car.CarBrowseIds
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.data.repository.HistoryRepository
+import com.aeroplay.app.data.repository.SettingsRepository
 import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.*
 import kotlinx.coroutines.guava.future
@@ -56,12 +62,19 @@ class AeroPlayMediaService : MediaLibraryService() {
         const val EXTRA_SECONDARY_AUDIO_MIME_TYPE = "com.aeroplay.app.EXTRA_SECONDARY_AUDIO_MIME_TYPE"
         const val ACTION_SET_NOISY_HANDLING = "com.aeroplay.app.ACTION_SET_NOISY_HANDLING"
         const val EXTRA_NOISY_ENABLED = "com.aeroplay.app.EXTRA_NOISY_ENABLED"
+        const val ACTION_SET_STABLE_VOLUME = "com.aeroplay.app.ACTION_SET_STABLE_VOLUME"
+        const val EXTRA_STABLE_VOLUME_ENABLED = "com.aeroplay.app.EXTRA_STABLE_VOLUME_ENABLED"
+        const val ACTION_SET_SLEEP_TIMER = "com.aeroplay.app.ACTION_SET_SLEEP_TIMER"
+        const val EXTRA_SLEEP_TIMER_DEADLINE = "com.aeroplay.app.EXTRA_SLEEP_TIMER_DEADLINE"
+        const val EXTRA_SLEEP_TIMER_VIDEO_ID = "com.aeroplay.app.EXTRA_SLEEP_TIMER_VIDEO_ID"
+        const val EXTRA_SLEEP_TIMER_ENDS_AFTER_CURRENT = "com.aeroplay.app.EXTRA_SLEEP_TIMER_ENDS_AFTER_CURRENT"
     }
 
     @Inject
     lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var carLibrary: CarMediaLibrary
     @Inject lateinit var historyRepository: HistoryRepository
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var carGeneration = 0L
@@ -71,6 +84,11 @@ class AeroPlayMediaService : MediaLibraryService() {
 
     private var player: ExoPlayer? = null
     private var mediaSession: MediaLibrarySession? = null
+    private var stableVolumeEffect: AudioEffect? = null
+    private var stableVolumeSessionId: Int = 0
+    private var sleepTimerJob: Job? = null
+    private var sleepTimerDeadlineRealtimeMs: Long? = null
+    private var sleepTimerVideoId: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -137,6 +155,7 @@ class AeroPlayMediaService : MediaLibraryService() {
             }
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val carVideo = CarMediaLibrary.summary(mediaItem)
+                if (sleepTimerVideoId != null && mediaItem?.mediaId != sleepTimerVideoId) clearSleepTimer()
                 exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, carVideo != null).build()
                 carProgressJob?.cancel()
@@ -160,6 +179,23 @@ class AeroPlayMediaService : MediaLibraryService() {
                     remainingCarTracks.clear()
                     prefetchJob?.cancel()
                 }
+                serviceScope.launch {
+                    if (settingsRepository.getSettingsSnapshot().stableVolumeEnabled && exoPlayer.audioSessionId > 0 &&
+                        stableVolumeSessionId != exoPlayer.audioSessionId
+                    ) {
+                        if (!enableStableVolume(exoPlayer)) settingsRepository.setStableVolumeEnabled(false)
+                    }
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState != Player.STATE_ENDED || sleepTimerVideoId != exoPlayer.currentMediaItem?.mediaId) return
+                val carVideo = CarMediaLibrary.summary(exoPlayer.currentMediaItem)
+                if (carVideo != null && exoPlayer.duration > 0) serviceScope.launch {
+                    historyRepository.updatePositionOnly(carVideo.id, exoPlayer.duration, exoPlayer.duration)
+                }
+                exoPlayer.pause()
+                clearSleepTimer(stopIfIdle = true)
             }
 
             override fun onRenderedFirstFrame() {
@@ -216,7 +252,13 @@ class AeroPlayMediaService : MediaLibraryService() {
                     if (!ownApp && !controller.isTrusted && !knownHost) return MediaSession.ConnectionResult.reject()
                     val sessionCommands = MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                         .buildUpon()
-                        .apply { if (ownApp) add(SessionCommand(ACTION_SET_NOISY_HANDLING, Bundle.EMPTY)) }
+                        .apply {
+                            if (ownApp) {
+                                add(SessionCommand(ACTION_SET_NOISY_HANDLING, Bundle.EMPTY))
+                                add(SessionCommand(ACTION_SET_STABLE_VOLUME, Bundle.EMPTY))
+                                add(SessionCommand(ACTION_SET_SLEEP_TIMER, Bundle.EMPTY))
+                            }
+                        }
                         .build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailableSessionCommands(sessionCommands)
@@ -232,6 +274,23 @@ class AeroPlayMediaService : MediaLibraryService() {
                     if (controller.uid == applicationInfo.uid && customCommand.customAction == ACTION_SET_NOISY_HANDLING) {
                         val enabled = args.getBoolean(EXTRA_NOISY_ENABLED, true)
                         player?.setHandleAudioBecomingNoisy(enabled)
+                        return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+                    }
+                    if (controller.uid == applicationInfo.uid && customCommand.customAction == ACTION_SET_STABLE_VOLUME) {
+                        val enabled = args.getBoolean(EXTRA_STABLE_VOLUME_ENABLED, false)
+                        val applied = if (enabled) player?.let(::enableStableVolume) == true else {
+                            disableStableVolume()
+                            true
+                        }
+                        if (applied) serviceScope.launch { settingsRepository.setStableVolumeEnabled(enabled) }
+                        val resultCode = if (applied) SessionResult.RESULT_SUCCESS else SessionResult.RESULT_ERROR_NOT_SUPPORTED
+                        return Futures.immediateFuture(SessionResult(resultCode))
+                    }
+                    if (controller.uid == applicationInfo.uid && customCommand.customAction == ACTION_SET_SLEEP_TIMER) {
+                        val deadline = args.getLong(EXTRA_SLEEP_TIMER_DEADLINE, 0L).takeIf { it > 0L }
+                        val videoId = args.getString(EXTRA_SLEEP_TIMER_VIDEO_ID)
+                        val endsAfterCurrent = args.getBoolean(EXTRA_SLEEP_TIMER_ENDS_AFTER_CURRENT, false)
+                        setSleepTimer(deadline, videoId, endsAfterCurrent)
                         return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
                     }
                     return super.onCustomCommand(session, controller, customCommand, args)
@@ -303,6 +362,12 @@ class AeroPlayMediaService : MediaLibraryService() {
             .build()
 
         player = exoPlayer
+        serviceScope.launch {
+            if (settingsRepository.getSettingsSnapshot().stableVolumeEnabled && exoPlayer.audioSessionId > 0) {
+                delay(300L)
+                if (!enableStableVolume(exoPlayer)) settingsRepository.setStableVolumeEnabled(false)
+            }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -311,17 +376,20 @@ class AeroPlayMediaService : MediaLibraryService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val currentPlayer = player
-        if (currentPlayer == null ||
+        val sleepTimerPending = sleepTimerDeadlineRealtimeMs != null || sleepTimerVideoId != null
+        if (!sleepTimerPending && (currentPlayer == null ||
             !currentPlayer.playWhenReady ||
             currentPlayer.mediaItemCount == 0 ||
             currentPlayer.playbackState == Player.STATE_ENDED
-        ) {
+        )) {
             stopSelf()
         }
     }
 
     override fun onDestroy() {
         serviceScope.cancel()
+        clearSleepTimer()
+        disableStableVolume()
         mediaSession?.run {
             player.release()
             release()
@@ -329,6 +397,78 @@ class AeroPlayMediaService : MediaLibraryService() {
         mediaSession = null
         player = null
         super.onDestroy()
+    }
+
+    private fun enableStableVolume(exoPlayer: ExoPlayer): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return false
+        return enableStableVolumeApi28(exoPlayer)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun enableStableVolumeApi28(exoPlayer: ExoPlayer): Boolean {
+        val sessionId = exoPlayer.audioSessionId
+        if (sessionId <= 0) return false
+        if (stableVolumeEffect != null && stableVolumeSessionId == sessionId) {
+            return runCatching { stableVolumeEffect?.enabled = true }.isSuccess
+        }
+        disableStableVolume()
+        return runCatching {
+            val compressorBand = DynamicsProcessing.MbcBand(
+                true, 20_000f, 10f, 120f, 2.5f, -18f, 4f, -90f, 1f, 0f, 0f
+            )
+            val compressor = DynamicsProcessing.Mbc(true, true, 1).apply { setBand(0, compressorBand) }
+            val limiter = DynamicsProcessing.Limiter(true, true, 0, 5f, 100f, 10f, -1f, 0f)
+            val config = DynamicsProcessing.Config.Builder(
+                DynamicsProcessing.VARIANT_FAVOR_TIME_RESOLUTION, 2,
+                false, 0, true, 1, false, 0, true
+            ).setMbcAllChannelsTo(compressor).setLimiterAllChannelsTo(limiter).build()
+            val effect = DynamicsProcessing(0, sessionId, config)
+            effect.enabled = true
+            check(effect.enabled)
+            stableVolumeEffect = effect
+            stableVolumeSessionId = sessionId
+            true
+        }.getOrElse {
+            SourceDiagnostics.failure("audio.stable_volume_init", it)
+            disableStableVolume()
+            false
+        }
+    }
+
+    private fun disableStableVolume() {
+        runCatching { stableVolumeEffect?.enabled = false }
+        runCatching { stableVolumeEffect?.release() }
+        stableVolumeEffect = null
+        stableVolumeSessionId = 0
+    }
+
+    private fun setSleepTimer(deadlineRealtimeMs: Long?, videoId: String?, endsAfterCurrentVideo: Boolean) {
+        clearSleepTimer()
+        sleepTimerVideoId = videoId.takeIf { endsAfterCurrentVideo }
+        sleepTimerDeadlineRealtimeMs = deadlineRealtimeMs
+        if (deadlineRealtimeMs == null) return
+        sleepTimerJob = serviceScope.launch {
+            delay((deadlineRealtimeMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+            if (sleepTimerDeadlineRealtimeMs != deadlineRealtimeMs) return@launch
+            val activePlayer = player
+            val carVideo = CarMediaLibrary.summary(activePlayer?.currentMediaItem)
+            if (carVideo != null && (activePlayer?.duration ?: 0L) > 0L) {
+                historyRepository.updatePositionOnly(carVideo.id, activePlayer!!.currentPosition, activePlayer.duration)
+            }
+            activePlayer?.pause()
+            clearSleepTimer(stopIfIdle = true)
+        }
+    }
+
+    private fun clearSleepTimer(stopIfIdle: Boolean = false) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTimerDeadlineRealtimeMs = null
+        sleepTimerVideoId = null
+        if (stopIfIdle) {
+            val activePlayer = player
+            if (activePlayer == null || !activePlayer.playWhenReady || activePlayer.playbackState == Player.STATE_ENDED) stopSelf()
+        }
     }
 
     private fun <T : Any> libraryFuture(block: suspend () -> LibraryResult<T>): ListenableFuture<LibraryResult<T>> = serviceScope.future<LibraryResult<T>> {

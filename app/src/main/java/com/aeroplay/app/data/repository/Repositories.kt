@@ -117,4 +117,6 @@ interface SettingsRepository {
     suspend fun setPipEnabled(enabled: Boolean)
     suspend fun setBackgroundPlaybackEnabled(enabled: Boolean)
     suspend fun setAutoPlaySimilarMusic(enabled: Boolean)
+    suspend fun setAmbientLightingEnabled(enabled: Boolean)
+    suspend fun setStableVolumeEnabled(enabled: Boolean)
 }

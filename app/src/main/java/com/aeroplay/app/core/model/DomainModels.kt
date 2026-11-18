@@ -232,6 +232,11 @@ data class PlaybackState(
     val isAudioOnlyMode: Boolean = false,
     val selectedStreamVariant: StreamVariant? = null,
     val selectedAudioTrack: AudioTrack? = null,
+    val selectedSubtitleTrack: SubtitleTrack? = null,
+    val isRepeatOneEnabled: Boolean = false,
+    val sleepTimerDeadlineRealtimeMs: Long? = null,
+    val sleepTimerEndsAfterCurrentVideo: Boolean = false,
+    val stableVolumeEffectError: String? = null,
     val availableVariants: List<StreamVariant> = emptyList(),
     val availableAudioTracks: List<AudioTrack> = emptyList(),
     val queue: PlaybackQueue = PlaybackQueue(),
@@ -280,5 +285,7 @@ data class AppSettings(
     val pauseOnHeadphoneDisconnect: Boolean = true,
     val pipEnabled: Boolean = true,
     val backgroundPlaybackEnabled: Boolean = true,
-    val autoPlaySimilarMusic: Boolean = true
+    val autoPlaySimilarMusic: Boolean = true,
+    val ambientLightingEnabled: Boolean = false,
+    val stableVolumeEnabled: Boolean = false
 )

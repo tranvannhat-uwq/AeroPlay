@@ -8,6 +8,7 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -18,6 +19,7 @@ import com.aeroplay.app.core.model.PlaybackQueue
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.core.model.SourceError
 import com.aeroplay.app.core.model.StreamVariant
+import com.aeroplay.app.core.model.SubtitleTrack
 import com.aeroplay.app.core.model.VideoDetail
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.core.network.SourceDiagnostics
@@ -53,6 +55,22 @@ import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private fun SubtitleTrack.toSubtitleConfiguration(): MediaItem.SubtitleConfiguration? {
+    val normalizedMime = when (mimeType.substringBefore(';').trim().lowercase()) {
+        "text/vtt", "application/x-subrip", "application/ttml+xml" -> mimeType.substringBefore(';').trim().lowercase()
+        else -> return null
+    }
+    if (!url.startsWith("https://") && !url.startsWith("http://") && !url.startsWith("file://")) return null
+    return runCatching {
+        MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
+            .setMimeType(normalizedMime)
+            .setLanguage(languageCode.takeIf { it.isNotBlank() })
+            .setLabel(displayName.takeIf { it.isNotBlank() })
+            .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+            .build()
+    }.getOrNull()
+}
 
 /**
  * Single coordinator between the UI and [AeroPlayMediaService] via [MediaController].
@@ -94,6 +112,9 @@ class PlaybackControllerManager @Inject constructor(
     private var sessionWatchedMs = 0L
     private var pendingWatchedMs = 0L
     private var autoPlaySimilarMusic = true
+    private var sleepTimerJob: Job? = null
+    private var sleepTimerDeadlineRealtimeMs: Long? = null
+    private var sleepTimerVideoId: String? = null
 
     init {
         connectSession()
@@ -214,6 +235,22 @@ class PlaybackControllerManager @Inject constructor(
 
                 if (playbackState == Player.STATE_ENDED) {
                     if (CarMediaLibrary.summary(controller.currentMediaItem) != null) return
+                    val sleepVideoId = sleepTimerVideoId
+                    val currentId = _playbackState.value.currentVideo?.id
+                    val timedDeadline = sleepTimerDeadlineRealtimeMs
+                    if (timedDeadline != null && SystemClock.elapsedRealtime() >= timedDeadline) {
+                        persistCurrentPosition()
+                        controller.pause()
+                        cancelSleepTimer()
+                        return
+                    }
+                    if (sleepVideoId != null && sleepVideoId == currentId) {
+                        cancelSleepTimer()
+                        radioRecommendationJob?.cancel()
+                        controller.pause()
+                        _playbackState.update { it.copy(isPlaying = false) }
+                        return
+                    }
                     persistCurrentPosition()
                     val video = _playbackState.value.currentVideo
                     val durationMs = controller.duration.takeIf { it > 0L }
@@ -238,6 +275,10 @@ class PlaybackControllerManager @Inject constructor(
 
             override fun onPlaybackParametersChanged(playbackParameters: PlaybackParameters) {
                 _playbackState.update { it.copy(playbackSpeed = playbackParameters.speed) }
+            }
+
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                _playbackState.update { it.copy(isRepeatOneEnabled = repeatMode == Player.REPEAT_MODE_ONE) }
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -380,6 +421,13 @@ class PlaybackControllerManager @Inject constructor(
         }
         SourceDiagnostics.event("player.selection", "source=${video.sourceType}")
         val currentLoadedId = _playbackState.value.currentVideo?.id
+        if (currentLoadedId != null && currentLoadedId != video.id) {
+            if (_playbackState.value.isRepeatOneEnabled) {
+                mediaController?.repeatMode = Player.REPEAT_MODE_OFF
+                _playbackState.update { it.copy(isRepeatOneEnabled = false) }
+            }
+            if (sleepTimerVideoId != null && sleepTimerVideoId != video.id) cancelSleepTimer()
+        }
         if (currentLoadedId == video.id && _playbackState.value.currentVideo?.sourceType == video.sourceType &&
             _playbackState.value.currentDetail != null && _playbackState.value.error == null) {
             if (replaceQueue) {
@@ -443,6 +491,7 @@ class PlaybackControllerManager @Inject constructor(
             it.copy(
                 currentVideo = video,
                 currentDetail = null,
+                selectedSubtitleTrack = null,
                 isLoadingMetadata = true,
                 isBuffering = true,
                 error = null,
@@ -643,13 +692,18 @@ class PlaybackControllerManager @Inject constructor(
             .setRequestMetadata(requestMetadata)
             .setMediaMetadata(metadata)
 
+        val subtitleTrack = _playbackState.value.selectedSubtitleTrack
+            ?.takeIf { !selection.isAudioOnly }
+            ?.toSubtitleConfiguration()
+        if (subtitleTrack != null) mediaItemBuilder.setSubtitleConfigurations(listOf(subtitleTrack))
+
         if (!selection.mimeType.isNullOrBlank()) {
             mediaItemBuilder.setMimeType(selection.mimeType)
         }
 
         controller.setMediaItem(mediaItemBuilder.build(), startPositionMs.coerceAtLeast(0L))
         SourceDiagnostics.event("player.prepare", "mime=${selection.mimeType} merged=${selection.isMergedAdaptive}")
-        defaultSpeed?.let { controller.setPlaybackSpeed(it) }
+        controller.setPlaybackSpeed(defaultSpeed ?: _playbackState.value.playbackSpeed)
         controller.prepare()
         controller.playWhenReady = autoPlay
     }
@@ -701,6 +755,138 @@ class PlaybackControllerManager @Inject constructor(
         val clamped = speed.coerceIn(0.5f, 2.0f)
         mediaController?.setPlaybackSpeed(clamped)
         _playbackState.update { it.copy(playbackSpeed = clamped) }
+    }
+
+    fun selectDefaultQuality() {
+        val state = _playbackState.value
+        val detail = state.currentDetail ?: return
+        val video = state.currentVideo ?: return
+        val controller = mediaController ?: return
+        val currentPos = controller.currentPosition.coerceAtLeast(0L)
+        val wasPlaying = controller.isPlaying
+        scope.launch {
+            val settings = settingsRepository.getSettingsSnapshot()
+            val resolved = streamResolver.resolveStream(
+                detail = detail,
+                preferredVariantId = null,
+                preferredQualityLabel = settings.defaultQualityLabel,
+                isAudioOnly = false,
+                dataSaver = settings.dataSaverEnabled
+            ).getOrNull() ?: return@launch
+            _playbackState.update { it.copy(selectedStreamVariant = resolved.selectedVariant,
+                selectedAudioTrack = resolved.selectedAudioTrack, isAudioOnlyMode = false, error = null) }
+            applyResolvedStream(video, detail, resolved, currentPos, wasPlaying)
+        }
+    }
+
+    fun selectSubtitle(track: SubtitleTrack?) {
+        val state = _playbackState.value
+        val selected = track?.takeIf { it.toSubtitleConfiguration() != null }
+        val detail = state.currentDetail ?: return
+        if (selected != null && detail.subtitleTracks.none { it.id == selected.id }) return
+        val currentVideo = state.currentVideo ?: return
+        val selection = currentStreamSelection ?: return
+        val controller = mediaController ?: return
+        val position = controller.currentPosition.coerceAtLeast(0L)
+        val wasPlaying = controller.isPlaying
+        _playbackState.update { it.copy(selectedSubtitleTrack = selected) }
+        applyResolvedStream(currentVideo, detail, selection, position, wasPlaying)
+    }
+
+    fun setRepeatOne(enabled: Boolean) {
+        val controller = mediaController ?: return
+        if (enabled && _playbackState.value.currentDetail?.isLive == true) return
+        val mode = if (enabled) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+        runCatching { controller.repeatMode = mode }
+            .onSuccess { _playbackState.update { it.copy(isRepeatOneEnabled = enabled) } }
+            .onFailure { SourceDiagnostics.failure("player.repeat", it) }
+    }
+
+    fun setSleepTimer(minutes: Int?) {
+        if (minutes == null || minutes <= 0) {
+            cancelSleepTimer()
+            return
+        }
+        sleepTimerJob?.cancel()
+        sleepTimerVideoId = null
+        val deadline = SystemClock.elapsedRealtime() + minutes.coerceAtMost(24 * 60) * 60_000L
+        sleepTimerDeadlineRealtimeMs = deadline
+        _playbackState.update { it.copy(sleepTimerDeadlineRealtimeMs = deadline, sleepTimerEndsAfterCurrentVideo = false) }
+        sendSleepTimerToService(deadline, null, false)
+        sleepTimerJob = scope.launch {
+            delay((deadline - SystemClock.elapsedRealtime()).coerceAtLeast(0L))
+            if (sleepTimerDeadlineRealtimeMs != deadline) return@launch
+            persistCurrentPosition()
+            mediaController?.pause()
+            cancelSleepTimer()
+        }
+    }
+
+    fun setSleepAtEndOfCurrentVideo(enabled: Boolean) {
+        if (!enabled) {
+            if (sleepTimerVideoId != null) cancelSleepTimer()
+            return
+        }
+        val currentId = _playbackState.value.currentVideo?.id ?: return
+        if (_playbackState.value.currentDetail?.isLive == true) return
+        sleepTimerJob?.cancel()
+        sleepTimerDeadlineRealtimeMs = null
+        sleepTimerVideoId = currentId
+        if (_playbackState.value.isRepeatOneEnabled) {
+            mediaController?.repeatMode = Player.REPEAT_MODE_OFF
+            _playbackState.update { it.copy(isRepeatOneEnabled = false) }
+        }
+        _playbackState.update { it.copy(sleepTimerDeadlineRealtimeMs = null, sleepTimerEndsAfterCurrentVideo = true) }
+        sendSleepTimerToService(null, currentId, true)
+    }
+
+    private fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTimerDeadlineRealtimeMs = null
+        sleepTimerVideoId = null
+        _playbackState.update { it.copy(sleepTimerDeadlineRealtimeMs = null, sleepTimerEndsAfterCurrentVideo = false) }
+        sendSleepTimerToService(null, null, false)
+    }
+
+    private fun sendSleepTimerToService(deadline: Long?, videoId: String?, endsAfterCurrent: Boolean) {
+        val controller = mediaController ?: return
+        val args = Bundle().apply {
+            putLong(AeroPlayMediaService.EXTRA_SLEEP_TIMER_DEADLINE, deadline ?: 0L)
+            putString(AeroPlayMediaService.EXTRA_SLEEP_TIMER_VIDEO_ID, videoId)
+            putBoolean(AeroPlayMediaService.EXTRA_SLEEP_TIMER_ENDS_AFTER_CURRENT, endsAfterCurrent)
+        }
+        scope.launch {
+            runCatching {
+                controller.sendCustomCommand(
+                    androidx.media3.session.SessionCommand(AeroPlayMediaService.ACTION_SET_SLEEP_TIMER, Bundle.EMPTY), args
+                ).await()
+            }.onFailure { SourceDiagnostics.failure("player.sleep_timer_service", it) }
+        }
+    }
+
+    fun setStableVolume(enabled: Boolean) {
+        val controller = mediaController ?: return
+        scope.launch {
+            try {
+                val args = Bundle().apply { putBoolean(AeroPlayMediaService.EXTRA_STABLE_VOLUME_ENABLED, enabled) }
+                val result = controller.sendCustomCommand(
+                    androidx.media3.session.SessionCommand(AeroPlayMediaService.ACTION_SET_STABLE_VOLUME, Bundle.EMPTY), args
+                ).await()
+                if (result.resultCode == androidx.media3.session.SessionResult.RESULT_SUCCESS) {
+                    settingsRepository.setStableVolumeEnabled(enabled)
+                    _playbackState.update { it.copy(stableVolumeEffectError = null) }
+                } else {
+                    if (enabled) settingsRepository.setStableVolumeEnabled(false)
+                    _playbackState.update { it.copy(stableVolumeEffectError = "Thiết bị không khởi tạo được bộ xử lý âm lượng ổn định.") }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (error: Exception) {
+                if (enabled) settingsRepository.setStableVolumeEnabled(false)
+                SourceDiagnostics.failure("player.stable_volume", error)
+                _playbackState.update { it.copy(stableVolumeEffectError = "Không thể áp dụng hiệu ứng trên phiên phát hiện tại.") }
+            }
+        }
     }
 
     fun selectQualityVariant(variant: StreamVariant) {
@@ -782,6 +968,7 @@ class PlaybackControllerManager @Inject constructor(
     }
 
     fun playNext() {
+        disableRepeatForTrackChange()
         mediaController?.takeIf { CarMediaLibrary.summary(it.currentMediaItem) != null }?.let {
             it.seekToNextMediaItem()
             return
@@ -802,6 +989,7 @@ class PlaybackControllerManager @Inject constructor(
     fun playPrevious() {
         val controller = mediaController
         if (controller != null && CarMediaLibrary.summary(controller.currentMediaItem) != null) {
+            disableRepeatForTrackChange()
             controller.seekToPrevious()
             return
         }
@@ -809,6 +997,7 @@ class PlaybackControllerManager @Inject constructor(
             seekTo(0L)
             return
         }
+        disableRepeatForTrackChange()
         val prevVideo = playbackRepository.previousInQueue() ?: return
         val updatedQueue = playbackRepository.activeQueue.value
         loadAndPlayVideo(
@@ -820,6 +1009,12 @@ class PlaybackControllerManager @Inject constructor(
             autoRadioAfterEnd = updatedQueue.autoRadioAfterEnd,
             startFromBeginning = updatedQueue.startFromBeginning
         )
+    }
+
+    private fun disableRepeatForTrackChange() {
+        if (!_playbackState.value.isRepeatOneEnabled) return
+        runCatching { mediaController?.repeatMode = Player.REPEAT_MODE_OFF }
+        _playbackState.update { it.copy(isRepeatOneEnabled = false) }
     }
 
     private fun continuePlaylistWithRadio(queue: PlaybackQueue) {

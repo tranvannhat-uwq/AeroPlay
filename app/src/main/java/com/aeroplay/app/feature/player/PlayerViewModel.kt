@@ -5,10 +5,12 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
 import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.core.model.StreamVariant
+import com.aeroplay.app.core.model.SubtitleTrack
 import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.data.repository.HistoryRepository
 import com.aeroplay.app.data.repository.PlaylistRepository
+import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.playback.controller.PlaybackControllerManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,7 +32,8 @@ class PlayerViewModel @Inject constructor(
     private val playbackController: PlaybackControllerManager,
     private val historyRepository: HistoryRepository,
     private val playlistRepository: PlaylistRepository,
-    private val libraryPreferences: com.aeroplay.app.data.repository.LibraryPreferencesRepository
+    private val libraryPreferences: com.aeroplay.app.data.repository.LibraryPreferencesRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     private val notice = MutableStateFlow<String?>(null)
     val restrictionNotice = notice.asStateFlow()
@@ -52,6 +55,9 @@ class PlayerViewModel @Inject constructor(
         }
     }
     val playerFlow: StateFlow<Player?> = playbackController.playerFlow
+    val appSettings = settingsRepository.settingsFlow.stateIn(
+        viewModelScope, SharingStarted.WhileSubscribed(5_000), com.aeroplay.app.core.model.AppSettings()
+    )
 
     val isCurrentFavorite: StateFlow<Boolean> = playbackState
         .flatMapLatest { state ->
@@ -78,6 +84,24 @@ class PlayerViewModel @Inject constructor(
     fun selectQuality(variant: StreamVariant) = playbackController.selectQualityVariant(variant)
 
     fun setPlaybackSpeed(speed: Float) = playbackController.setPlaybackSpeed(speed)
+
+    fun setDefaultQuality() = playbackController.selectDefaultQuality()
+
+    fun selectSubtitle(track: SubtitleTrack?) = playbackController.selectSubtitle(track)
+
+    fun setRepeatOne(enabled: Boolean) = playbackController.setRepeatOne(enabled)
+
+    fun setSleepTimer(minutes: Int?) = playbackController.setSleepTimer(minutes)
+
+    fun setSleepAtEndOfCurrentVideo(enabled: Boolean) = playbackController.setSleepAtEndOfCurrentVideo(enabled)
+
+    fun cancelSleepTimer() = playbackController.setSleepTimer(null)
+
+    fun setAmbientLighting(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAmbientLightingEnabled(enabled) }
+    }
+
+    fun setStableVolume(enabled: Boolean) = playbackController.setStableVolume(enabled)
 
     fun setAudioOnlyMode(enabled: Boolean) = playbackController.setAudioOnlyMode(enabled)
 

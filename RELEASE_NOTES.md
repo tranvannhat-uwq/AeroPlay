@@ -1,3 +1,13 @@
+AeroPlay 2.2.2
+
+- Thêm bánh răng Cài đặt phát trong khung video với chất lượng, tốc độ và phụ đề nếu video có track được hỗ trợ.
+- Bổ sung Khóa màn hình có xác nhận mở khóa và giao diện Trên đường đi với điều khiển nghe lớn.
+- Thêm lặp video hiện tại, ánh màu nền dịu từ ảnh bìa, hẹn giờ ngủ 5/15/30/45/60 phút hoặc hết video hiện tại.
+- Thêm Âm lượng ổn định trên Android 9 trở lên; Android 8.0/8.1 hiển thị trạng thái không hỗ trợ. Chế độ VR vẫn khóa cho đến khi có nguồn 360° được xác minh.
+- Giữ nguyên trình phát NewPipe + Media3, phát nền, PiP, Android Auto và dữ liệu Room hiện tại. Google/YouTube Data API vẫn tắt.
+
+Cài đè bản cũ để giữ dữ liệu. Android 8 trở lên.
+
 AeroPlay 2.2.1
 
 - Sửa mục Dành cho bạn tự tải lại khi tiến độ xem được lưu mỗi vài giây. Giữ nguyên danh sách cho đến lần kéo làm mới Trang chủ hoặc đổi nguồn nội dung.

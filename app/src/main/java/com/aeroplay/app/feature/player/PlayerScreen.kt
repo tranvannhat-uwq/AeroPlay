@@ -6,15 +6,18 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
@@ -38,6 +41,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -56,6 +62,7 @@ import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
@@ -63,6 +70,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
@@ -87,11 +95,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.TransformOrigin
@@ -114,6 +124,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
+import com.aeroplay.app.BuildConfig
 import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
 import com.aeroplay.app.core.designsystem.CompactVideoRowCard
 import com.aeroplay.app.core.designsystem.ErrorStateCard
@@ -135,6 +146,7 @@ fun FullPlayerOverlay(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.playbackState.collectAsStateWithLifecycle()
+    val appSettings by viewModel.appSettings.collectAsStateWithLifecycle()
     val player by viewModel.playerFlow.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isCurrentFavorite.collectAsStateWithLifecycle()
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
@@ -203,6 +215,11 @@ fun FullPlayerOverlay(
     var showQualityDialog by remember { mutableStateOf(false) }
     var showSpeedDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
+    var showPlayerSettings by remember(currentVideo.id) { mutableStateOf(false) }
+    var isTouchLocked by rememberSaveable(currentVideo.id) { mutableStateOf(false) }
+    var showUnlockConfirmation by remember { mutableStateOf(false) }
+    var isOnTheGoMode by rememberSaveable(currentVideo.id) { mutableStateOf(false) }
+    var showYouTubeMusicFallback by remember { mutableStateOf(false) }
     var isDescriptionExpanded by remember { mutableStateOf(false) }
 
     var isUserDraggingSeek by remember { mutableStateOf(false) }
@@ -216,7 +233,8 @@ fun FullPlayerOverlay(
     val canAutoHideControls = showControlsOverlay && state.isPlaying &&
         !state.isBuffering && !state.isLoadingMetadata && state.error == null &&
         !isUserDraggingSeek && !draggingPlayer && !touchingPlayer &&
-        !showQualityDialog && !showSpeedDialog && !showAddToPlaylistDialog &&
+        !showQualityDialog && !showSpeedDialog && !showAddToPlaylistDialog && !showPlayerSettings &&
+        !isTouchLocked &&
         state.isFullPlayerOpen && !state.isInPipMode
 
     LaunchedEffect(canAutoHideControls, controlsInteraction, currentVideo.id, isLandscapeFullscreen) {
@@ -232,6 +250,7 @@ fun FullPlayerOverlay(
 
     LaunchedEffect(state.isFullPlayerOpen, state.isInPipMode) {
         if (state.isFullPlayerOpen || state.isInPipMode) dragOffset = 0f
+        if (!state.isFullPlayerOpen || state.isInPipMode) showPlayerSettings = false
     }
 
     DisposableEffect(Unit) {
@@ -258,7 +277,9 @@ fun FullPlayerOverlay(
     }
 
     BackHandler(enabled = state.isFullPlayerOpen && !state.isInPipMode) {
-        if (isLandscapeFullscreen) {
+        if (isTouchLocked) {
+            Toast.makeText(context, "Mở khóa màn hình để tiếp tục.", Toast.LENGTH_SHORT).show()
+        } else if (isLandscapeFullscreen) {
             exitLandscape()
         } else {
             viewModel.minimizePlayer()
@@ -396,44 +417,80 @@ fun FullPlayerOverlay(
                             alpha = 0.22f,
                             modifier = Modifier.fillMaxSize()
                         )
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = statusColors.audioModeActive.copy(alpha = 0.2f),
-                                modifier = Modifier.size(64.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Headphones,
-                                        contentDescription = null,
-                                        tint = statusColors.audioModeActive,
-                                        modifier = Modifier.size(34.dp)
-                                    )
+                        if (isOnTheGoMode) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(10.dp)) {
+                                AsyncImage(
+                                    model = detail?.thumbnailUrl ?: currentVideo.thumbnailUrl,
+                                    contentDescription = "Ảnh bìa ${detail?.title ?: currentVideo.title}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(94.dp).clip(RoundedCornerShape(18.dp))
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(detail?.title ?: currentVideo.title, style = MaterialTheme.typography.titleSmall,
+                                    color = AeroPlayBrand.PlayerForeground, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(onClick = viewModel::playPrevious) {
+                                        Icon(Icons.Filled.SkipPrevious, "Bài trước", tint = AeroPlayBrand.PlayerForeground)
+                                    }
+                                    IconButton(onClick = viewModel::togglePlayPause, modifier = Modifier.size(52.dp)) {
+                                        Icon(if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                            if (state.isPlaying) "Tạm dừng" else "Phát", tint = AeroPlayBrand.PlayerForeground,
+                                            modifier = Modifier.size(34.dp))
+                                    }
+                                    IconButton(onClick = viewModel::playNext) {
+                                        Icon(Icons.Filled.SkipNext, "Bài tiếp", tint = AeroPlayBrand.PlayerForeground)
+                                    }
+                                }
+                                TextButton(onClick = {
+                                    isOnTheGoMode = false
+                                    viewModel.setAudioOnlyMode(false)
+                                }) { Text("Trở về xem video") }
+                                if (state.selectedAudioTrack == null) {
+                                    Text("Nguồn không có luồng âm thanh riêng; chế độ này vẫn dùng luồng video hiện tại.",
+                                        style = MaterialTheme.typography.labelSmall, color = statusColors.audioModeActive, maxLines = 2)
                                 }
                             }
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "Chế độ Chỉ Âm Thanh (Tiết kiệm dữ liệu)",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = AeroPlayBrand.PlayerForeground
-                            )
-                            Text(
-                                text = state.selectedAudioTrack?.label ?: "Đang phát luồng âm thanh nền",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = statusColors.audioModeActive
-                            )
+                        } else {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                                Surface(shape = CircleShape, color = statusColors.audioModeActive.copy(alpha = 0.2f), modifier = Modifier.size(64.dp)) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Filled.Headphones, null, tint = statusColors.audioModeActive, modifier = Modifier.size(34.dp))
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text("Chế độ Chỉ Âm Thanh (Tiết kiệm dữ liệu)", style = MaterialTheme.typography.titleSmall, color = AeroPlayBrand.PlayerForeground)
+                                Text(state.selectedAudioTrack?.label ?: "Đang phát luồng âm thanh nền", style = MaterialTheme.typography.bodySmall, color = statusColors.audioModeActive)
+                            }
                         }
                     }
                 } else {
-                    PlayerVideoSurface(
-                        player = player,
-                        output = videoOutput,
-                        active = state.isFullPlayerOpen,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    val showAmbient = appSettings.ambientLightingEnabled && state.isFullPlayerOpen &&
+                        !state.isInPipMode && !state.isAudioOnlyMode
+                    Box(Modifier.fillMaxSize()) {
+                        if (showAmbient) {
+                            val ambientCover = detail?.thumbnailUrl ?: currentVideo.thumbnailUrl
+                            Crossfade(
+                                targetState = ambientCover,
+                                animationSpec = tween(if (statusColors.reduceMotion) 0 else 1_000),
+                                label = "Player ambient cover",
+                                modifier = Modifier.fillMaxSize()
+                            ) { cover ->
+                                AsyncImage(
+                                    model = cover,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    alpha = 0.82f,
+                                    modifier = Modifier.fillMaxSize().blur(if (statusColors.reduceMotion) 18.dp else 28.dp)
+                                )
+                            }
+                        }
+                        PlayerVideoSurface(
+                            player = player,
+                            output = videoOutput,
+                            active = state.isFullPlayerOpen,
+                            modifier = if (showAmbient) Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(14.dp)) else Modifier.fillMaxSize()
+                        )
+                    }
                 }
 
                 // Buffering Spinner
@@ -467,7 +524,8 @@ fun FullPlayerOverlay(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .align(Alignment.TopCenter)
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                                .then(if (isLandscapeFullscreen) Modifier.windowInsetsPadding(WindowInsets.safeDrawing) else Modifier),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -514,6 +572,20 @@ fun FullPlayerOverlay(
                                         imageVector = Icons.Filled.PictureInPictureAlt,
                                         contentDescription = "Bật Picture-in-Picture",
                                         tint = AeroPlayBrand.PlayerForeground
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        keepControlsVisible()
+                                        showPlayerSettings = true
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Settings,
+                                        contentDescription = "Cài đặt phát",
+                                        tint = AeroPlayBrand.PlayerForeground,
+                                        modifier = Modifier.size(25.dp)
                                     )
                                 }
                             }
@@ -913,6 +985,117 @@ fun FullPlayerOverlay(
                 }
             }
         }
+        if (isTouchLocked) {
+            Box(
+                modifier = Modifier.fillMaxSize()
+                    .background(AeroPlayBrand.PlayerScrim.copy(alpha = 0.12f))
+                    .clickable { },
+                contentAlignment = Alignment.Center
+            ) {
+                Surface(shape = RoundedCornerShape(24.dp), color = AeroPlayBrand.Navy.copy(alpha = 0.9f)) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp)) {
+                        IconButton(onClick = { showUnlockConfirmation = true }, modifier = Modifier.size(56.dp)) {
+                            Icon(Icons.Filled.LockOpen, "Mở khóa màn hình", tint = AeroPlayBrand.PlayerForeground, modifier = Modifier.size(30.dp))
+                        }
+                        Text("Đã khóa màn hình", color = AeroPlayBrand.PlayerForeground, style = MaterialTheme.typography.labelLarge)
+                        Text("Chạm để mở khóa", color = AeroPlayBrand.PlayerForeground.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPlayerSettings && !isTouchLocked) {
+        PlayerSettingsSheet(
+            currentQuality = if (state.isAudioOnlyMode) "Chỉ âm thanh" else state.selectedStreamVariant?.resolutionLabel ?: "Theo chất lượng mặc định",
+            selectedVariantId = state.selectedStreamVariant?.id,
+            variants = state.availableVariants,
+            isAudioOnly = state.isAudioOnlyMode,
+            playbackSpeed = state.playbackSpeed,
+            subtitles = detail?.subtitleTracks.orEmpty(),
+            selectedSubtitle = state.selectedSubtitleTrack,
+            isLive = detail?.isLive == true || currentVideo.isLive,
+            repeatEnabled = state.isRepeatOneEnabled,
+            ambientEnabled = appSettings.ambientLightingEnabled,
+            stableVolumeEnabled = appSettings.stableVolumeEnabled,
+            stableVolumeError = state.stableVolumeEffectError,
+            isOnTheGo = isOnTheGoMode,
+            sleepDeadlineRealtimeMs = state.sleepTimerDeadlineRealtimeMs,
+            sleepAtEndOfVideo = state.sleepTimerEndsAfterCurrentVideo,
+            canOpenYouTubeMusic = currentVideo.sourceType.isExperimental && YouTubePolicyFeatureFlags.isYouTubeVideo(currentVideo),
+            feedbackUrl = "https://github.com/${BuildConfig.UPDATE_REPOSITORY}/issues/new",
+            appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+            deviceSummary = "${Build.MANUFACTURER} ${Build.MODEL} • Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+            onDismiss = { showPlayerSettings = false; keepControlsVisible() },
+            onQuality = { viewModel.selectQuality(it); showPlayerSettings = false; keepControlsVisible() },
+            onDefaultQuality = { viewModel.setDefaultQuality(); showPlayerSettings = false; keepControlsVisible() },
+            onAudioOnly = { enabled -> viewModel.setAudioOnlyMode(enabled); showPlayerSettings = false; keepControlsVisible() },
+            onSpeed = { viewModel.setPlaybackSpeed(it); showPlayerSettings = false; keepControlsVisible() },
+            onSubtitle = { viewModel.selectSubtitle(it); showPlayerSettings = false; keepControlsVisible() },
+            onLockScreen = { isTouchLocked = true },
+            onTheGo = { enabled ->
+                isOnTheGoMode = enabled
+                viewModel.setAudioOnlyMode(enabled)
+            },
+            onRepeat = viewModel::setRepeatOne,
+            onAmbient = viewModel::setAmbientLighting,
+            onStableVolume = viewModel::setStableVolume,
+            onSleepMinutes = { if (it == 0) viewModel.cancelSleepTimer() else viewModel.setSleepTimer(it) },
+            onSleepAtEnd = viewModel::setSleepAtEndOfCurrentVideo,
+            onOpenYouTubeMusic = {
+                showPlayerSettings = false
+                val musicUri = Uri.Builder().scheme("https").authority("music.youtube.com").path("watch")
+                    .appendQueryParameter("v", currentVideo.id).build()
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, musicUri).setPackage("com.google.android.apps.youtube.music"))
+                    if (state.isPlaying) viewModel.togglePlayPause()
+                } catch (_: ActivityNotFoundException) {
+                    showYouTubeMusicFallback = true
+                }
+            },
+            onOpenFeedback = { baseUrl ->
+                val device = "${Build.MANUFACTURER} ${Build.MODEL} • Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+                val body = "AeroPlay ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n$device\n\nMô tả vấn đề hoặc đề xuất:"
+                val feedbackUri = Uri.parse(baseUrl).buildUpon()
+                    .appendQueryParameter("title", "Phản hồi AeroPlay")
+                    .appendQueryParameter("body", body)
+                    .build()
+                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, feedbackUri)) }
+                    .onFailure { Toast.makeText(context, "Không mở được GitHub. Hãy thử lại sau.", Toast.LENGTH_SHORT).show() }
+            }
+        )
+    }
+
+    if (showUnlockConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showUnlockConfirmation = false },
+            title = { Text("Mở khóa màn hình?") },
+            text = { Text("Sau khi mở khóa, thao tác chạm và vuốt trong trình phát sẽ hoạt động lại.") },
+            confirmButton = { TextButton(onClick = { isTouchLocked = false; showUnlockConfirmation = false; keepControlsVisible() }) { Text("Mở khóa") } },
+            dismissButton = { TextButton(onClick = { showUnlockConfirmation = false }) { Text("Hủy") } }
+        )
+    }
+
+    if (showYouTubeMusicFallback) {
+        AlertDialog(
+            onDismissRequest = { showYouTubeMusicFallback = false },
+            title = { Text("Không tìm thấy YouTube Music") },
+            text = { Text("Bạn có thể mở trang nghe trên web. AeroPlay chỉ tạm dừng sau khi trang web mở được.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showYouTubeMusicFallback = false
+                    val uri = Uri.Builder().scheme("https").authority("music.youtube.com").path("watch")
+                        .appendQueryParameter("v", currentVideo.id).build()
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                        if (state.isPlaying) viewModel.togglePlayPause()
+                    } catch (_: ActivityNotFoundException) {
+                        Toast.makeText(context, "Không mở được liên kết YouTube Music.", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Mở web") }
+            },
+            dismissButton = { TextButton(onClick = { showYouTubeMusicFallback = false }) { Text("Ở lại") } }
+        )
     }
 }
 
