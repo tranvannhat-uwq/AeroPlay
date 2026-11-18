@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.ClosedCaption
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.OpenInNew
@@ -107,7 +108,9 @@ internal fun PlayerSettingsSheet(
     onSleepMinutes: (Int) -> Unit,
     onSleepAtEnd: (Boolean) -> Unit,
     onOpenYouTubeMusic: () -> Unit,
-    onOpenFeedback: (String) -> Unit
+    onOpenFeedback: (String) -> Unit,
+    canLockScreen: Boolean,
+    onEnterPip: (() -> Unit)? = null
 ) {
     var page by remember { mutableStateOf(PlayerSettingsPage.MAIN) }
     var timerTick by remember { mutableIntStateOf(0) }
@@ -169,7 +172,17 @@ internal fun PlayerSettingsSheet(
                                 if (supportedSubtitles.isEmpty()) page = PlayerSettingsPage.SUBTITLES else page = PlayerSettingsPage.SUBTITLES
                             }
                         }
-                        item { SettingsRow(Icons.Filled.Lock, "Khóa màn hình", "Khóa thao tác chạm") { onDismiss(); onLockScreen() } }
+                        item {
+                            SettingsRow(
+                                Icons.Filled.Lock,
+                                "Khóa màn hình",
+                                if (canLockScreen) "Khóa thao tác chạm" else "Chỉ dùng khi xem toàn màn hình",
+                                enabled = canLockScreen
+                            ) {
+                                onDismiss()
+                                onLockScreen()
+                            }
+                        }
                         item {
                             SettingsRow(Icons.Filled.DirectionsCar, "Trên đường đi", if (isOnTheGo) "Đang bật" else "Giao diện nghe nhạc lớn") {
                                 onTheGo(!isOnTheGo)
@@ -204,6 +217,14 @@ internal fun PlayerSettingsSheet(
                         }
                         if (canOpenYouTubeMusic) {
                             item { SettingsRow(Icons.Filled.MusicNote, "Nghe nhạc trên YouTube Music", "Mở video hiện tại", onClick = onOpenYouTubeMusic) }
+                        }
+                        if (onEnterPip != null) {
+                            item {
+                                SettingsRow(Icons.Filled.PictureInPictureAlt, "Cửa sổ nổi PiP", "Thu nhỏ trình phát") {
+                                    onDismiss()
+                                    onEnterPip()
+                                }
+                            }
                         }
                         item {
                             SettingsRow(Icons.Filled.Vrpano, "Xem ở chế độ thực tế ảo", "Nguồn chưa cung cấp metadata 360° đã xác minh", enabled = false) {}

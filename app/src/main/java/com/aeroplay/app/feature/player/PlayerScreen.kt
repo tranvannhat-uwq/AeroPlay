@@ -51,8 +51,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkAdd
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -60,19 +60,15 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Headphones
-import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Verified
-import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -83,6 +79,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
@@ -114,10 +112,13 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.text.HtmlCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -134,7 +135,6 @@ import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import androidx.compose.material.icons.filled.Block
 import com.aeroplay.app.core.model.PlaybackState
-import com.aeroplay.app.core.model.StreamVariant
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import kotlinx.coroutines.delay
 
@@ -212,20 +212,35 @@ fun FullPlayerOverlay(
     var showControlsOverlay by remember(currentVideo.id) { mutableStateOf(true) }
     var controlsInteraction by remember { mutableIntStateOf(0) }
     var touchingPlayer by remember { mutableStateOf(false) }
-    var showQualityDialog by remember { mutableStateOf(false) }
-    var showSpeedDialog by remember { mutableStateOf(false) }
     var showAddToPlaylistDialog by remember { mutableStateOf(false) }
     var showPlayerSettings by remember(currentVideo.id) { mutableStateOf(false) }
-    var isTouchLocked by rememberSaveable(currentVideo.id) { mutableStateOf(false) }
-    var showUnlockConfirmation by remember { mutableStateOf(false) }
+    val immersive = isLandscapeFullscreen && state.isFullPlayerOpen && !state.isInPipMode
+    var touchLockRequested by rememberSaveable { mutableStateOf(false) }
+    val isTouchLocked = immersive && touchLockRequested
+    LaunchedEffect(immersive) {
+        if (!immersive) touchLockRequested = false
+    }
     var isOnTheGoMode by rememberSaveable(currentVideo.id) { mutableStateOf(false) }
     var showYouTubeMusicFallback by remember { mutableStateOf(false) }
-    var isDescriptionExpanded by remember { mutableStateOf(false) }
+    var isDescriptionExpanded by rememberSaveable(currentVideo.sourceType.name, currentVideo.id) { mutableStateOf(false) }
+    val description = remember(detail?.description) {
+        val raw = detail?.description.orEmpty().replace("\r\n", "\n").replace('\r', '\n')
+        if (descriptionHtmlTag.containsMatchIn(raw)) {
+            HtmlCompat.fromHtml(raw.replace("\n", "<br>"), HtmlCompat.FROM_HTML_MODE_COMPACT).toString().trim()
+        } else raw.trim()
+    }
+    val channelName = detail?.channelName.orEmpty().ifBlank { currentVideo.channelName }
+    val channelUri = remember(detail?.channelUrl, currentVideo.channelUrl) {
+        sequenceOf(detail?.channelUrl.orEmpty(), currentVideo.channelUrl)
+            .map { Uri.parse(it.trim()) }
+            .firstOrNull { (it.scheme == "https" || it.scheme == "http") && !it.host.isNullOrBlank() }
+    }
 
     var isUserDraggingSeek by remember { mutableStateOf(false) }
     var dragSeekPositionMs by remember { mutableFloatStateOf(0f) }
 
     fun keepControlsVisible() {
+        if (isTouchLocked) return
         controlsInteraction++
         showControlsOverlay = true
     }
@@ -233,7 +248,7 @@ fun FullPlayerOverlay(
     val canAutoHideControls = showControlsOverlay && state.isPlaying &&
         !state.isBuffering && !state.isLoadingMetadata && state.error == null &&
         !isUserDraggingSeek && !draggingPlayer && !touchingPlayer &&
-        !showQualityDialog && !showSpeedDialog && !showAddToPlaylistDialog && !showPlayerSettings &&
+        !showAddToPlaylistDialog && !showPlayerSettings &&
         !isTouchLocked &&
         state.isFullPlayerOpen && !state.isInPipMode
 
@@ -245,7 +260,7 @@ fun FullPlayerOverlay(
     }
 
     LaunchedEffect(state.isPlaying, state.error) {
-        if (!state.isPlaying || state.error != null) showControlsOverlay = true
+        if (!isTouchLocked && (!state.isPlaying || state.error != null)) showControlsOverlay = true
     }
 
     LaunchedEffect(state.isFullPlayerOpen, state.isInPipMode) {
@@ -259,7 +274,6 @@ fun FullPlayerOverlay(
         }
     }
 
-    val immersive = isLandscapeFullscreen && state.isFullPlayerOpen && !state.isInPipMode
     DisposableEffect(activity, immersive) {
         val window = activity?.window
         val bars = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
@@ -277,9 +291,8 @@ fun FullPlayerOverlay(
     }
 
     BackHandler(enabled = state.isFullPlayerOpen && !state.isInPipMode) {
-        if (isTouchLocked) {
-            Toast.makeText(context, "Mở khóa màn hình để tiếp tục.", Toast.LENGTH_SHORT).show()
-        } else if (isLandscapeFullscreen) {
+        if (isTouchLocked) return@BackHandler
+        if (isLandscapeFullscreen) {
             exitLandscape()
         } else {
             viewModel.minimizePlayer()
@@ -302,34 +315,6 @@ fun FullPlayerOverlay(
             )
         }
         return
-    }
-
-    if (showQualityDialog) {
-        QualitySelectorDialog(
-            variants = state.availableVariants,
-            selectedVariant = state.selectedStreamVariant,
-            isAudioOnly = state.isAudioOnlyMode,
-            onDismiss = { showQualityDialog = false },
-            onSelectVariant = { variant ->
-                viewModel.selectQuality(variant)
-                showQualityDialog = false
-            },
-            onSelectAudioOnly = {
-                viewModel.setAudioOnlyMode(true)
-                showQualityDialog = false
-            }
-        )
-    }
-
-    if (showSpeedDialog) {
-        SpeedSelectorDialog(
-            currentSpeed = state.playbackSpeed,
-            onDismiss = { showSpeedDialog = false },
-            onSelectSpeed = { speed ->
-                viewModel.setPlaybackSpeed(speed)
-                showSpeedDialog = false
-            }
-        )
     }
 
     if (showAddToPlaylistDialog) {
@@ -370,7 +355,8 @@ fun FullPlayerOverlay(
             Box(
                 modifier = videoBoxModifier
                     .testTag("FullVideoStage")
-                    .pointerInput(currentVideo.id) {
+                    .pointerInput(currentVideo.id, isTouchLocked) {
+                        if (isTouchLocked) return@pointerInput
                         awaitEachGesture {
                             awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                             touchingPlayer = true
@@ -400,7 +386,7 @@ fun FullPlayerOverlay(
                             }
                         }
                     )
-                    .clickable { showControlsOverlay = !showControlsOverlay }
+                    .clickable(enabled = !isTouchLocked) { showControlsOverlay = !showControlsOverlay }
             ) {
                 if (state.isAudioOnlyMode) {
                     // Audio-Only Mode Visual Stage (genuinely playing audio track to save data)
@@ -417,7 +403,7 @@ fun FullPlayerOverlay(
                             alpha = 0.22f,
                             modifier = Modifier.fillMaxSize()
                         )
-                        if (isOnTheGoMode) {
+                        if (!isTouchLocked && isOnTheGoMode) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(10.dp)) {
                                 AsyncImage(
                                     model = detail?.thumbnailUrl ?: currentVideo.thumbnailUrl,
@@ -450,7 +436,7 @@ fun FullPlayerOverlay(
                                         style = MaterialTheme.typography.labelSmall, color = statusColors.audioModeActive, maxLines = 2)
                                 }
                             }
-                        } else {
+                        } else if (!isTouchLocked) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
                                 Surface(shape = CircleShape, color = statusColors.audioModeActive.copy(alpha = 0.2f), modifier = Modifier.size(64.dp)) {
                                     Box(contentAlignment = Alignment.Center) {
@@ -494,7 +480,7 @@ fun FullPlayerOverlay(
                 }
 
                 // Buffering Spinner
-                if (state.isBuffering || state.isLoadingMetadata) {
+                if (!isTouchLocked && (state.isBuffering || state.isLoadingMetadata)) {
                     CircularProgressIndicator(
                         color = statusColors.playButton,
                         modifier = Modifier
@@ -504,7 +490,25 @@ fun FullPlayerOverlay(
                 }
 
                 // Player Controls Overlay
-                androidx.compose.animation.AnimatedVisibility(
+                if (isTouchLocked) {
+                    IconButton(
+                        onClick = {
+                            touchLockRequested = false
+                            controlsInteraction++
+                            showControlsOverlay = true
+                        },
+                        modifier = Modifier.align(Alignment.TopEnd)
+                            .windowInsetsPadding(WindowInsets.safeDrawing)
+                            .padding(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Filled.Lock,
+                            contentDescription = "Mở khóa màn hình",
+                            tint = AeroPlayBrand.PlayerForeground.copy(alpha = 0.55f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                } else androidx.compose.animation.AnimatedVisibility(
                     visible = showControlsOverlay,
                     enter = fadeIn(),
                     exit = fadeOut(),
@@ -547,33 +551,17 @@ fun FullPlayerOverlay(
                             }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                // Quality chip in top-right of video
-                                Surface(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { showQualityDialog = true },
-                                    color = AeroPlayBrand.PlayerScrim.copy(alpha = 0.6f),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = if (state.isAudioOnlyMode) {
-                                            "Audio Only"
-                                        } else {
-                                            state.selectedStreamVariant?.resolutionLabel ?: "Auto"
-                                        },
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = AeroPlayBrand.PlayerForeground,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                    )
-                                }
-
-                                IconButton(onClick = onEnterPip) {
-                                    Icon(
-                                        imageVector = Icons.Filled.PictureInPictureAlt,
-                                        contentDescription = "Bật Picture-in-Picture",
-                                        tint = AeroPlayBrand.PlayerForeground
-                                    )
-                                }
+                                Switch(
+                                    checked = appSettings.autoPlaySimilarMusic,
+                                    onCheckedChange = {
+                                        keepControlsVisible()
+                                        viewModel.setAutoplay(it)
+                                    },
+                                    modifier = Modifier.semantics { contentDescription = "Tự động phát tiếp" },
+                                    thumbContent = {
+                                        Icon(Icons.Filled.SkipNext, null, modifier = Modifier.size(SwitchDefaults.IconSize))
+                                    }
+                                )
                                 IconButton(
                                     onClick = {
                                         keepControlsVisible()
@@ -801,7 +789,7 @@ fun FullPlayerOverlay(
                         }
                     }
 
-                    // Action Pills Row (Favorite, Audio-Only, Quality, Speed, PiP, Add to Playlist)
+                    // Actions below the video
                     item {
                         Row(
                             modifier = Modifier
@@ -812,36 +800,23 @@ fun FullPlayerOverlay(
                             PlayerActionChip(
                                 icon = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                                 label = if (isFavorite) "Đã thích" else "Yêu thích",
+                                iconOnly = true,
                                 activeColor = if (isFavorite) statusColors.favoriteActive else null,
                                 onClick = { viewModel.toggleFavorite() }
                             )
 
                             PlayerActionChip(
                                 icon = Icons.Filled.Headphones,
-                                label = if (state.isAudioOnlyMode) "Chỉ Âm thanh: BẬT" else "Chỉ Âm thanh",
+                                label = if (state.isAudioOnlyMode) "Chỉ âm thanh: Bật" else "Chỉ âm thanh: Tắt",
+                                iconOnly = true,
                                 activeColor = if (state.isAudioOnlyMode) statusColors.audioModeActive else null,
                                 onClick = { viewModel.setAudioOnlyMode(!state.isAudioOnlyMode) }
                             )
 
-                            PlayerActionChip(icon = Icons.Filled.Block, label = "Hạn chế gợi ý tương tự",
-                                onClick = viewModel::restrictCurrentVideo)
-
                             PlayerActionChip(
-                                icon = Icons.Filled.HighQuality,
-                                label = state.selectedStreamVariant?.resolutionLabel ?: "Chất lượng",
-                                onClick = { showQualityDialog = true }
-                            )
-
-                            PlayerActionChip(
-                                icon = Icons.Filled.Speed,
-                                label = "${state.playbackSpeed}x",
-                                onClick = { showSpeedDialog = true }
-                            )
-
-                            PlayerActionChip(
-                                icon = Icons.Filled.PictureInPictureAlt,
-                                label = "Cửa sổ nổi PiP",
-                                onClick = onEnterPip
+                                icon = Icons.Filled.Block,
+                                label = "Hạn chế",
+                                onClick = viewModel::restrictCurrentVideo
                             )
 
                             PlayerActionChip(
@@ -852,103 +827,80 @@ fun FullPlayerOverlay(
                         }
                     }
 
-                    // Channel Row & Expandable Description
-                    item {
-                        GlassSurface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .clickable { isDescriptionExpanded = !isDescriptionExpanded },
-                            shape = RoundedCornerShape(16.dp),
-                            elevation = 2.dp
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    AsyncImage(
-                                        model = (detail?.channelAvatarUrl ?: currentVideo.channelAvatarUrl)
-                                            .ifBlank { detail?.thumbnailUrl ?: currentVideo.thumbnailUrl },
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = detail?.channelName ?: currentVideo.channelName,
-                                                style = MaterialTheme.typography.titleSmall
+                    if (channelName.isNotBlank() || description.isNotBlank()) {
+                        item {
+                            GlassSurface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                elevation = 2.dp
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        val channelLink = if (channelUri != null) {
+                                            Modifier.clip(RoundedCornerShape(8.dp)).clickable(
+                                                onClickLabel = "Mở trang kênh"
+                                            ) {
+                                                try {
+                                                    context.startActivity(Intent(Intent.ACTION_VIEW, channelUri))
+                                                } catch (_: ActivityNotFoundException) {
+                                                    Toast.makeText(context, "Không tìm thấy ứng dụng để mở trang kênh.", Toast.LENGTH_SHORT).show()
+                                                }
+                                            }
+                                        } else Modifier
+                                        Row(
+                                            modifier = Modifier.weight(1f).then(channelLink),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            AsyncImage(
+                                                model = detail?.channelAvatarUrl.orEmpty()
+                                                    .ifBlank { currentVideo.channelAvatarUrl }
+                                                    .ifBlank { currentVideo.thumbnailUrl },
+                                                contentDescription = null,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.size(40.dp).clip(CircleShape)
+                                                    .background(MaterialTheme.colorScheme.surfaceVariant)
                                             )
-                                            if (detail?.isChannelVerified == true) {
-                                                Spacer(modifier = Modifier.width(4.dp))
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Column {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(
+                                                        text = channelName,
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        modifier = Modifier.weight(1f, fill = false)
+                                                    )
+                                                    if (detail?.isChannelVerified == true) {
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Icon(Icons.Filled.Verified, null, tint = statusColors.verifiedBadge,
+                                                            modifier = Modifier.size(15.dp))
+                                                    }
+                                                }
+                                                val subs = FormatUtils.formatSubscribers(detail?.subscriberCount ?: -1L)
+                                                if (subs.isNotBlank()) {
+                                                    Text(subs, style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                                }
+                                            }
+                                        }
+                                        if (description.isNotBlank()) {
+                                            IconButton(onClick = { isDescriptionExpanded = !isDescriptionExpanded }) {
                                                 Icon(
-                                                    imageVector = Icons.Filled.Verified,
-                                                    contentDescription = null,
-                                                    tint = statusColors.verifiedBadge,
-                                                    modifier = Modifier.size(15.dp)
+                                                    imageVector = if (isDescriptionExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                                    contentDescription = if (isDescriptionExpanded) "Thu gọn mô tả" else "Xem thêm mô tả",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
                                         }
-                                        val subs = FormatUtils.formatSubscribers(detail?.subscriberCount ?: -1L)
-                                        if (subs.isNotBlank()) {
-                                            Text(
-                                                text = subs,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
                                     }
-                                    Icon(
-                                        imageVector = Icons.Filled.ExpandMore,
-                                        contentDescription = "Xem mô tả",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-
-                                val desc = detail?.description.orEmpty()
-                                if (desc.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text(
-                                        text = desc,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = if (isDescriptionExpanded) 100 else 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Experimental Source Risk Notice (Requirement II.10 & V.6)
-                    if (currentVideo.sourceType.isExperimental) {
-                        item {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
-                                color = statusColors.experimentalWarning.copy(alpha = 0.14f)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.WarningAmber,
-                                        contentDescription = null,
-                                        tint = statusColors.experimentalWarning,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = "Chế độ Extractor thử nghiệm: Luồng phát và phát nền phụ thuộc vào khả năng tương thích của nguồn tại thời điểm truy cập.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
+                                    if (description.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -971,34 +923,14 @@ fun FullPlayerOverlay(
                         ) { item ->
                             CompactVideoRowCard(
                                 video = item,
-                                onClick = {
-                                    viewModel.playRelatedOrQueueVideo(
-                                        video = item,
-                                        queue = state.queue.items,
-                                        title = state.queue.queueTitle,
-                                        radioMode = state.queue.radioMode
-                                    )
+                                onClick = { viewModel.playQueuedVideo(item) },
+                                trailingContent = {
+                                    IconButton(onClick = { viewModel.restrictUpcomingVideo(item) }) {
+                                        Icon(Icons.Filled.Block, contentDescription = "Hạn chế ${item.title}")
+                                    }
                                 }
                             )
                         }
-                    }
-                }
-            }
-        }
-        if (isTouchLocked) {
-            Box(
-                modifier = Modifier.fillMaxSize()
-                    .background(AeroPlayBrand.PlayerScrim.copy(alpha = 0.12f))
-                    .clickable { },
-                contentAlignment = Alignment.Center
-            ) {
-                Surface(shape = RoundedCornerShape(24.dp), color = AeroPlayBrand.Navy.copy(alpha = 0.9f)) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp)) {
-                        IconButton(onClick = { showUnlockConfirmation = true }, modifier = Modifier.size(56.dp)) {
-                            Icon(Icons.Filled.LockOpen, "Mở khóa màn hình", tint = AeroPlayBrand.PlayerForeground, modifier = Modifier.size(30.dp))
-                        }
-                        Text("Đã khóa màn hình", color = AeroPlayBrand.PlayerForeground, style = MaterialTheme.typography.labelLarge)
-                        Text("Chạm để mở khóa", color = AeroPlayBrand.PlayerForeground.copy(alpha = 0.75f), style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -1032,7 +964,14 @@ fun FullPlayerOverlay(
             onAudioOnly = { enabled -> viewModel.setAudioOnlyMode(enabled); showPlayerSettings = false; keepControlsVisible() },
             onSpeed = { viewModel.setPlaybackSpeed(it); showPlayerSettings = false; keepControlsVisible() },
             onSubtitle = { viewModel.selectSubtitle(it); showPlayerSettings = false; keepControlsVisible() },
-            onLockScreen = { isTouchLocked = true },
+            onLockScreen = {
+                if (immersive) {
+                    showControlsOverlay = false
+                    touchLockRequested = true
+                }
+            },
+            canLockScreen = immersive,
+            onEnterPip = onEnterPip,
             onTheGo = { enabled ->
                 isOnTheGoMode = enabled
                 viewModel.setAudioOnlyMode(enabled)
@@ -1063,16 +1002,6 @@ fun FullPlayerOverlay(
                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, feedbackUri)) }
                     .onFailure { Toast.makeText(context, "Không mở được GitHub. Hãy thử lại sau.", Toast.LENGTH_SHORT).show() }
             }
-        )
-    }
-
-    if (showUnlockConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showUnlockConfirmation = false },
-            title = { Text("Mở khóa màn hình?") },
-            text = { Text("Sau khi mở khóa, thao tác chạm và vuốt trong trình phát sẽ hoạt động lại.") },
-            confirmButton = { TextButton(onClick = { isTouchLocked = false; showUnlockConfirmation = false; keepControlsVisible() }) { Text("Mở khóa") } },
-            dismissButton = { TextButton(onClick = { showUnlockConfirmation = false }) { Text("Hủy") } }
         )
     }
 
@@ -1266,6 +1195,7 @@ private fun PlayerActionChip(
     icon: ImageVector,
     label: String,
     activeColor: Color? = null,
+    iconOnly: Boolean = false,
     onClick: () -> Unit
 ) {
     val bgColor = activeColor?.copy(alpha = 0.18f)
@@ -1285,175 +1215,21 @@ private fun PlayerActionChip(
         ) {
             Icon(
                 imageVector = icon,
-                contentDescription = label,
+                contentDescription = if (iconOnly) label else null,
                 tint = contentColor,
                 modifier = Modifier.size(18.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = contentColor,
-                fontWeight = FontWeight.Medium
-            )
+            if (!iconOnly) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = contentColor,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
     }
 }
 
-@Composable
-private fun QualitySelectorDialog(
-    variants: List<StreamVariant>,
-    selectedVariant: StreamVariant?,
-    isAudioOnly: Boolean,
-    onDismiss: () -> Unit,
-    onSelectVariant: (StreamVariant) -> Unit,
-    onSelectAudioOnly: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Chất lượng phát thực tế") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "Chỉ hiển thị các luồng thực sự có sẵn từ nguồn hiện tại (không giả lập 1080p/4K khi nguồn không cung cấp):",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                if (variants.isEmpty()) {
-                    Text(
-                        text = "Không có biến thể video riêng biệt.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                } else {
-                    variants.forEach { variant ->
-                        val selected = !isAudioOnly && selectedVariant?.id == variant.id
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onSelectVariant(variant) },
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.primaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = variant.resolutionLabel,
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                                if (selected) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Check,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Audio-Only option
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { onSelectAudioOnly() },
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isAudioOnly) {
-                        MaterialTheme.colorScheme.tertiaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Chỉ Âm thanh (Audio-Only Stream)",
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        if (isAudioOnly) {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Đóng")
-            }
-        }
-    )
-}
-
-@Composable
-private fun SpeedSelectorDialog(
-    currentSpeed: Float,
-    onDismiss: () -> Unit,
-    onSelectSpeed: (Float) -> Unit
-) {
-    val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Tốc độ phát") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                speeds.forEach { speed ->
-                    val selected = kotlin.math.abs(currentSpeed - speed) < 0.01f
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onSelectSpeed(speed) },
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (selected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                        }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = if (speed == 1.0f) "1.0x (Chuẩn)" else "${speed}x",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            if (selected) {
-                                Icon(
-                                    imageVector = Icons.Filled.Check,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Đóng")
-            }
-        }
-    )
-}
+private val descriptionHtmlTag = Regex("""</?(?:a|br|p|div|span|b|strong|i|em|u|ul|ol|li|blockquote)\b""", RegexOption.IGNORE_CASE)

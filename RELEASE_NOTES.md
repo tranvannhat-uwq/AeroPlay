@@ -1,3 +1,11 @@
+AeroPlay 2.2.3
+
+- Khóa chạm chỉ dùng khi xem toàn màn hình. Khi khóa, các nút phát và lớp phủ biến mất. Chạm biểu tượng khóa nhỏ ở góc trên bên phải để mở khóa ngay.
+- Thêm công tắc Tự động phát tiếp cạnh bánh răng. Tắt công tắc để dừng sau video hiện tại.
+- Thêm nút Hạn chế trên mỗi video trong mục Tiếp theo. Video được bỏ ngay khỏi hàng chờ và lưu vào Danh sách hạn chế.
+- Bấm ảnh đại diện hoặc tên kênh để mở trang kênh. Mô tả video được hiển thị dưới dạng dễ đọc và có thể mở rộng.
+- Thu gọn hàng nút dưới video. Chất lượng và tốc độ nằm trong bánh răng, PiP nằm trong Tùy chọn khác.
+
 AeroPlay 2.2.2
 
 - Thêm bánh răng Cài đặt phát trong khung video với chất lượng, tốc độ và phụ đề nếu video có track được hỗ trợ.

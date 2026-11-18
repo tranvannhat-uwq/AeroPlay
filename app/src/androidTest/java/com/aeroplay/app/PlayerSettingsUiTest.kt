@@ -90,20 +90,23 @@ class PlayerSettingsUiTest {
                 compose.onNodeWithText("Cài đặt phát").assertIsDisplayed()
                 compose.waitForIdle()
                 captureEvidence("player-settings-landscape.png")
-                compose.onNodeWithContentDescription("Đóng cài đặt phát").performClick()
+                compose.onNodeWithText("Khóa màn hình").performClick()
+                compose.onNodeWithContentDescription("Mở khóa màn hình").assertIsDisplayed()
+                compose.onNodeWithContentDescription("Cài đặt phát").assertDoesNotExist()
+                compose.onNodeWithContentDescription("Toàn màn hình / Xoay ngang").assertDoesNotExist()
+                compose.onNodeWithTag("FullVideoStage").performTouchInput { click() }
+                compose.onNodeWithContentDescription("Cài đặt phát").assertDoesNotExist()
+                compose.onNodeWithContentDescription("Mở khóa màn hình").performClick()
+                compose.onNodeWithContentDescription("Mở khóa màn hình").assertDoesNotExist()
                 compose.onNodeWithContentDescription("Toàn màn hình / Xoay ngang").performClick()
                 compose.waitUntil(10_000) { currentOrientation() == Configuration.ORIENTATION_PORTRAIT }
 
                 compose.onNodeWithContentDescription("Đóng cài đặt phát").assertDoesNotExist()
 
                 compose.onNodeWithContentDescription("Cài đặt phát").performClick()
-                compose.onNodeWithText("Khóa màn hình").performClick()
-                compose.onNodeWithContentDescription("Mở khóa màn hình").assertIsDisplayed().performClick()
-                compose.onNodeWithText("Mở khóa màn hình?").assertIsDisplayed()
-                compose.onNodeWithText("Mở khóa").performClick()
-                compose.onNodeWithText("Mở khóa màn hình?").assertDoesNotExist()
+                compose.onNodeWithText("Khóa màn hình").assertIsNotEnabled()
+                compose.onNodeWithContentDescription("Mở khóa màn hình").assertDoesNotExist()
 
-                compose.onNodeWithContentDescription("Cài đặt phát").performClick()
                 compose.onNodeWithText("Trên đường đi").performClick()
                 compose.waitUntil(10_000) { playback.playbackState.value.isAudioOnlyMode }
                 compose.onNodeWithText("Trở về xem video").assertIsDisplayed().performClick()

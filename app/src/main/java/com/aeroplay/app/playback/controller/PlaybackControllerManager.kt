@@ -27,6 +27,7 @@ import com.aeroplay.app.data.repository.HistoryRepository
 import com.aeroplay.app.data.repository.MusicRecommendationRanker
 import com.aeroplay.app.data.repository.MusicSuggestionRepository
 import com.aeroplay.app.data.repository.PlaybackRepository
+import com.aeroplay.app.data.repository.RecommendationRanking
 import com.aeroplay.app.data.repository.ResolvedStreamSelection
 import com.aeroplay.app.data.repository.SettingsRepository
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
@@ -263,12 +264,11 @@ class PlaybackControllerManager @Inject constructor(
                         scope.launch { historyRepository.recordCompletion(video.id) }
                     }
                     val activeQueue = playbackRepository.activeQueue.value
-                    if (activeQueue.hasNext && (!activeQueue.radioMode || autoPlaySimilarMusic)) {
-                        playNext()
-                    } else if (!activeQueue.hasNext && activeQueue.autoRadioAfterEnd && autoPlaySimilarMusic) {
-                        continuePlaylistWithRadio(activeQueue)
-                    } else if (!activeQueue.hasNext && activeQueue.radioMode && autoPlaySimilarMusic) {
-                        requestRadioRecommendations(activeQueue.currentItem, _playbackState.value.currentDetail)
+                    if (!autoPlaySimilarMusic) return
+                    when {
+                        activeQueue.hasNext -> playNext()
+                        activeQueue.autoRadioAfterEnd -> continuePlaylistWithRadio(activeQueue)
+                        activeQueue.radioMode -> requestRadioRecommendations(activeQueue.currentItem, _playbackState.value.currentDetail)
                     }
                 }
             }
@@ -568,15 +568,20 @@ class PlaybackControllerManager @Inject constructor(
                                             )
                                         }
                                     }
-                                val played = recentAndPending.take(queueBeforeRecommendations.currentIndex + 1).takeLast(12)
-                                val pending = recentAndPending.drop(queueBeforeRecommendations.currentIndex + 1)
-                                val compacted = (played + pending).distinctBy { "${it.sourceType.name}:${it.id}" }
-                                val updated = queueBeforeRecommendations.copy(
-                                    items = (compacted + fresh).take(80),
-                                    currentIndex = (played.size - 1).coerceAtLeast(0)
-                                )
-                                playbackRepository.updateQueue(updated)
-                                updated
+                                val latestQueue = playbackRepository.activeQueue.value
+                                if (latestQueue !== queueBeforeRecommendations) {
+                                    latestQueue
+                                } else {
+                                    val played = recentAndPending.take(latestQueue.currentIndex + 1).takeLast(12)
+                                    val pending = recentAndPending.drop(latestQueue.currentIndex + 1)
+                                    val compacted = (played + pending).distinctBy(RecommendationRanking::stableKey)
+                                    val updated = latestQueue.copy(
+                                        items = (compacted + fresh).take(80),
+                                        currentIndex = (played.size - 1).coerceAtLeast(0)
+                                    )
+                                    playbackRepository.updateQueue(updated)
+                                    updated
+                                }
                             } else queueBeforeRecommendations
                             _playbackState.update { state ->
                                 state.copy(
@@ -965,6 +970,37 @@ class PlaybackControllerManager @Inject constructor(
                 autoPlay = wasPlaying
             )
         }
+    }
+
+    fun removeUpcomingVideo(video: VideoItem): Boolean {
+        val queue = playbackRepository.activeQueue.value
+        if (queue.currentIndex < 0) return false
+        val key = RecommendationRanking.stableKey(video)
+        val played = queue.items.take(queue.currentIndex + 1)
+        val upcoming = queue.items.drop(played.size)
+        val remaining = upcoming.filterNot { RecommendationRanking.stableKey(it) == key }
+        if (remaining.size == upcoming.size) return false
+        radioRecommendationJob?.cancel()
+        val updated = queue.copy(items = played + remaining)
+        playbackRepository.updateQueue(updated)
+        _playbackState.update { it.copy(queue = updated) }
+        return true
+    }
+
+    fun playUpcomingVideo(video: VideoItem) {
+        val queue = playbackRepository.activeQueue.value
+        val key = RecommendationRanking.stableKey(video)
+        val item = queue.items.drop(queue.currentIndex + 1)
+            .firstOrNull { RecommendationRanking.stableKey(it) == key } ?: return
+        loadAndPlayVideo(
+            video = item,
+            queueItems = queue.items,
+            queueTitle = queue.queueTitle,
+            openFullPlayer = true,
+            radioMode = queue.radioMode,
+            autoRadioAfterEnd = queue.autoRadioAfterEnd,
+            startFromBeginning = queue.startFromBeginning
+        )
     }
 
     fun playNext() {

@@ -296,8 +296,8 @@ fun SettingsScreen(
 
                     SettingsToggleRow(
                         icon = Icons.Filled.AutoAwesome,
-                        title = "Tự phát tiếp nhạc cùng phong cách",
-                        subtitle = "Tự chuyển sang bài phù hợp khi bài hiện tại kết thúc",
+                        title = "Tự động phát tiếp",
+                        subtitle = "Tự phát mục tiếp theo trong hàng chờ hoặc bài gợi ý khi mục hiện tại kết thúc",
                         checked = settings.autoPlaySimilarMusic,
                         onCheckedChange = { viewModel.setAutoPlaySimilarMusic(it) }
                     )

@@ -46,12 +46,23 @@ class PlayerViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), playbackController.playbackState.value)
     fun restrictCurrentVideo() {
         val video = playbackState.value.currentVideo ?: return
+        saveVideoRestriction(video)
+    }
+
+    fun restrictUpcomingVideo(video: VideoItem) {
+        if (playbackController.removeUpcomingVideo(video)) saveVideoRestriction(video, removedFromQueue = true)
+    }
+
+    private fun saveVideoRestriction(video: VideoItem, removedFromQueue: Boolean = false) {
         viewModelScope.launch {
             try {
                 libraryPreferences.restrictVideo(video)
-                notice.value = "Đã thêm vào danh sách hạn chế"
+                notice.value = if (removedFromQueue) "Đã hạn chế và bỏ khỏi Tiếp theo" else "Đã thêm vào danh sách hạn chế"
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { notice.value = "Chưa lưu được lựa chọn. Hãy thử lại." }
+            catch (_: Exception) {
+                notice.value = if (removedFromQueue) "Đã bỏ khỏi Tiếp theo, nhưng chưa lưu vào danh sách hạn chế."
+                else "Chưa lưu được lựa chọn. Hãy thử lại."
+            }
         }
     }
     val playerFlow: StateFlow<Player?> = playbackController.playerFlow
@@ -78,6 +89,10 @@ class PlayerViewModel @Inject constructor(
     fun skipBackward() = playbackController.skipDelta(-10_000L)
 
     fun playNext() = playbackController.playNext()
+
+    fun setAutoplay(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutoPlaySimilarMusic(enabled) }
+    }
 
     fun playPrevious() = playbackController.playPrevious()
 
@@ -113,15 +128,7 @@ class PlayerViewModel @Inject constructor(
 
     fun retryPlayback() = playbackController.retryCurrentVideo()
 
-    fun playRelatedOrQueueVideo(video: VideoItem, queue: List<VideoItem>, title: String, radioMode: Boolean) {
-        playbackController.loadAndPlayVideo(
-            video = video,
-            queueItems = queue,
-            queueTitle = title,
-            openFullPlayer = true,
-            radioMode = radioMode
-        )
-    }
+    fun playQueuedVideo(video: VideoItem) = playbackController.playUpcomingVideo(video)
 
     fun toggleFavorite() {
         val current = playbackState.value.currentVideo ?: return
