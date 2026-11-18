@@ -22,7 +22,6 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
-import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService
@@ -38,7 +37,10 @@ import com.aeroplay.app.playback.car.CarMediaLibrary
 import com.aeroplay.app.playback.car.CarBrowseIds
 import com.aeroplay.app.core.model.VideoItem
 import com.aeroplay.app.data.repository.HistoryRepository
+import com.aeroplay.app.data.repository.PlaybackRepository
 import com.aeroplay.app.data.repository.SettingsRepository
+import com.aeroplay.app.playback.controller.PlaybackControllerManager
+import com.aeroplay.app.playback.widget.PlaybackWidget
 import com.google.common.collect.ImmutableList
 import kotlinx.coroutines.*
 import kotlinx.coroutines.guava.future
@@ -75,6 +77,8 @@ class AeroPlayMediaService : MediaLibraryService() {
     @Inject lateinit var carLibrary: CarMediaLibrary
     @Inject lateinit var historyRepository: HistoryRepository
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var playbackRepository: PlaybackRepository
+    @Inject lateinit var phonePlayback: dagger.Lazy<PlaybackControllerManager>
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var carGeneration = 0L
@@ -221,7 +225,13 @@ class AeroPlayMediaService : MediaLibraryService() {
             setSmallIcon(com.aeroplay.app.R.drawable.ic_stat_aeroplay)
         })
 
-        mediaSession = MediaLibrarySession.Builder(this, exoPlayer, object : MediaLibrarySession.Callback {
+        val sessionPlayer = QueueSessionPlayer(
+            engine = exoPlayer,
+            queue = { playbackRepository.activeQueue.value },
+            skipNext = { phonePlayback.get().playNext() },
+            skipPrevious = { phonePlayback.get().playPreviousTrack() }
+        )
+        mediaSession = MediaLibrarySession.Builder(this, sessionPlayer, object : MediaLibrarySession.Callback {
                 override fun onGetLibraryRoot(session: MediaLibrarySession, browser: MediaSession.ControllerInfo, params: LibraryParams?) =
                     Futures.immediateFuture(LibraryResult.ofItem(carLibrary.root(), params))
 
@@ -362,6 +372,17 @@ class AeroPlayMediaService : MediaLibraryService() {
             .build()
 
         player = exoPlayer
+        sessionPlayer.addListener(object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                PlaybackWidget.updateFromPlayer(this@AeroPlayMediaService, player)
+            }
+        })
+        serviceScope.launch {
+            playbackRepository.activeQueue.collect {
+                sessionPlayer.onQueueChanged()
+                PlaybackWidget.updateFromPlayer(this@AeroPlayMediaService, sessionPlayer)
+            }
+        }
         serviceScope.launch {
             if (settingsRepository.getSettingsSnapshot().stableVolumeEnabled && exoPlayer.audioSessionId > 0) {
                 delay(300L)
@@ -396,6 +417,7 @@ class AeroPlayMediaService : MediaLibraryService() {
         }
         mediaSession = null
         player = null
+        PlaybackWidget.clear(this)
         super.onDestroy()
     }
 

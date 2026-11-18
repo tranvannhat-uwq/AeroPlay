@@ -731,7 +731,7 @@ class PlaybackControllerManager @Inject constructor(
 
     fun togglePlayPause() {
         val controller = mediaController ?: return
-        if (controller.isPlaying) {
+        if (controller.playWhenReady && controller.playbackState != Player.STATE_ENDED) {
             controller.pause()
         } else {
             if (controller.playbackState == Player.STATE_ENDED) {
@@ -1031,6 +1031,16 @@ class PlaybackControllerManager @Inject constructor(
         }
         if (controller != null && controller.currentPosition > 5_000L) {
             seekTo(0L)
+            return
+        }
+        playPreviousTrack()
+    }
+
+    fun playPreviousTrack() {
+        val controller = mediaController
+        if (controller != null && CarMediaLibrary.summary(controller.currentMediaItem) != null) {
+            disableRepeatForTrackChange()
+            controller.seekToPreviousMediaItem()
             return
         }
         disableRepeatForTrackChange()

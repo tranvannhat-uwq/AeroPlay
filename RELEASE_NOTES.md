@@ -1,3 +1,9 @@
+AeroPlay 2.2.4
+
+- Chuyển bài trước hoặc sau từ thanh thông báo và màn hình khóa khi AeroPlay đang phát nền. Các nút dùng hàng chờ hiện tại.
+- Thêm widget AeroPlay bán trong suốt trên màn hình chính, có tên bài và nút Bài trước, Phát/Tạm dừng, Bài sau.
+- Thêm widget bằng cách nhấn giữ chỗ trống trên màn hình chính, chọn Tiện ích rồi chọn AeroPlay · Trình phát.
+
 AeroPlay 2.2.3
 
 - Khóa chạm chỉ dùng khi xem toàn màn hình. Khi khóa, các nút phát và lớp phủ biến mất. Chạm biểu tượng khóa nhỏ ở góc trên bên phải để mở khóa ngay.

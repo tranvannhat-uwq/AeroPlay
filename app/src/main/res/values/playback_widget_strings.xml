@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="playback_widget_name">AeroPlay · Trình phát</string>
+    <string name="playback_widget_description">Điều khiển AeroPlay từ màn hình chính.</string>
+    <string name="playback_widget_idle">Mở AeroPlay để phát</string>
+    <string name="playback_widget_play">Phát</string>
+    <string name="playback_widget_pause">Tạm dừng</string>
+    <string name="playback_widget_previous">Bài trước</string>
+    <string name="playback_widget_next">Bài sau</string>
+</resources>
