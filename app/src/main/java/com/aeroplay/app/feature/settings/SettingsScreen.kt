@@ -54,7 +54,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,17 +88,13 @@ fun SettingsScreen(
     val youtubeAccount by accountViewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val widgetContext = context.applicationContext
-    var widgetMode by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).mode.name) }
-    var widgetOpacity by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).opacity.toFloat()) }
-    var widgetHighContrast by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).highContrast) }
-    var widgetAccent by rememberSaveable { mutableStateOf(WidgetAppearance.load(widgetContext).accent.name) }
-    fun saveWidgetAppearance() {
-        WidgetAppearance(
-            mode = WidgetGlassMode.valueOf(widgetMode),
-            opacity = widgetOpacity.roundToInt(),
-            highContrast = widgetHighContrast,
-            accent = WidgetAccent.valueOf(widgetAccent)
-        ).save(widgetContext)
+    var widgetAppearance by remember { mutableStateOf(WidgetAppearance.load(widgetContext)) }
+    var widgetOpacity by remember { mutableStateOf(widgetAppearance.opacity.toFloat()) }
+    var widgetApplied by remember { mutableStateOf(false) }
+    fun applyWidgetAppearance(value: WidgetAppearance) {
+        widgetAppearance = value
+        value.save(widgetContext)
+        widgetApplied = true
     }
 
     var showOpenSourceLicenses by remember { mutableStateOf(false) }
@@ -256,34 +251,55 @@ fun SettingsScreen(
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         WidgetGlassMode.entries.forEach { mode ->
                             FilterChip(
-                                selected = widgetMode == mode.name,
+                                selected = widgetAppearance.mode == mode,
                                 onClick = {
-                                    widgetMode = mode.name
-                                    saveWidgetAppearance()
+                                    applyWidgetAppearance(widgetAppearance.copy(mode = mode))
                                 },
                                 label = { Text(mode.label) }
                             )
                         }
                     }
-                    Text("Độ đục nền mong muốn · ${widgetOpacity.roundToInt()}%", style = MaterialTheme.typography.titleSmall)
+                    Text("Độ đục nền · ${widgetOpacity.roundToInt()}%", style = MaterialTheme.typography.titleSmall)
                     Slider(
                         value = widgetOpacity,
-                        onValueChange = { widgetOpacity = it },
+                        onValueChange = {
+                            widgetOpacity = it
+                            widgetApplied = false
+                        },
                         valueRange = 0f..100f,
-                        onValueChangeFinished = { saveWidgetAppearance() }
+                        onValueChangeFinished = {
+                            applyWidgetAppearance(widgetAppearance.copy(
+                                opacity = widgetOpacity.roundToInt(),
+                                customOpacity = true,
+                                highContrast = false
+                            ))
+                        }
                     )
                     Text(
-                        "Widget có chữ tự tăng độ đậm khi cần để dễ đọc.",
+                        if (widgetAppearance.customOpacity && !widgetAppearance.highContrast)
+                            "Đang dùng độ đục bạn chọn. Tăng độ đục nếu chữ khó đọc."
+                        else "Tương phản tự động có thể tăng độ đục nền để chữ rõ hơn.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(10.dp))
                     Text("Tương phản", style = MaterialTheme.typography.titleSmall)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for ((enabled, label) in listOf(false to "Tự động", true to "Cao")) {
+                        for ((mode, label) in listOf("auto" to "Tự động", "high" to "Cao", "custom" to "Độ đục tự chọn")) {
+                            val selectedMode = when {
+                                widgetAppearance.highContrast -> "high"
+                                widgetAppearance.customOpacity -> "custom"
+                                else -> "auto"
+                            }
                             FilterChip(
-                                selected = widgetHighContrast == enabled,
-                                onClick = { widgetHighContrast = enabled; saveWidgetAppearance() },
+                                selected = selectedMode == mode,
+                                onClick = {
+                                    applyWidgetAppearance(widgetAppearance.copy(
+                                        opacity = widgetOpacity.roundToInt(),
+                                        highContrast = mode == "high",
+                                        customOpacity = mode == "custom"
+                                    ))
+                                },
                                 label = { Text(label) }
                             )
                         }
@@ -292,11 +308,21 @@ fun SettingsScreen(
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         WidgetAccent.entries.forEach { accent ->
                             FilterChip(
-                                selected = widgetAccent == accent.name,
-                                onClick = { widgetAccent = accent.name; saveWidgetAppearance() },
+                                selected = widgetAppearance.accent == accent,
+                                onClick = { applyWidgetAppearance(widgetAppearance.copy(accent = accent)) },
                                 label = { Text(accent.label) }
                             )
                         }
+                    }
+                    TextButton(onClick = {
+                        applyWidgetAppearance(widgetAppearance.copy(opacity = widgetOpacity.roundToInt()))
+                    }) { Text("Áp dụng lại widget") }
+                    if (widgetApplied) {
+                        Text(
+                            "Đã áp dụng cho widget trên màn hình chính",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                     Text("Bố cục tự đổi theo kích thước widget", style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)

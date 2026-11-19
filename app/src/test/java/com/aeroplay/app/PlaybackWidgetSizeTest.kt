@@ -36,6 +36,21 @@ class PlaybackWidgetSizeTest {
         assertEquals(255, WidgetAppearance(opacity = 100).fillAlpha)
     }
 
+    @Test fun customOpacityIsAppliedExactlyAtEverySliderValue() {
+        for (dark in listOf(false, true)) {
+            for (percent in 0..100) {
+                val appearance = WidgetAppearance(opacity = percent, customOpacity = true)
+                val colors = AdaptiveWidgetColorScheme.create(dark, appearance)
+                assertEquals(appearance.fillAlpha, colors.guardedAlpha)
+            }
+            val auto = AdaptiveWidgetColorScheme.create(dark, WidgetAppearance(opacity = 0))
+            assertTrue(auto.guardedAlpha > 0)
+            val high = AdaptiveWidgetColorScheme.create(dark,
+                WidgetAppearance(opacity = 0, customOpacity = true, highContrast = true))
+            assertTrue(high.guardedAlpha >= 222)
+        }
+    }
+
     @Test fun textAndProgressRemainReadableAgainstAdverseWallpaper() {
         for (dark in listOf(false, true)) {
             for (accent in WidgetAccent.entries) {

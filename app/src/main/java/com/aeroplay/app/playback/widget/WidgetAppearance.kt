@@ -18,7 +18,8 @@ internal data class WidgetAppearance(
     val mode: WidgetGlassMode = WidgetGlassMode.ADAPTIVE,
     val opacity: Int = DEFAULT_OPACITY,
     val highContrast: Boolean = false,
-    val accent: WidgetAccent = WidgetAccent.SYSTEM
+    val accent: WidgetAccent = WidgetAccent.SYSTEM,
+    val customOpacity: Boolean = false
 ) {
     val fillAlpha: Int get() = (opacity.coerceIn(0, 100) * 255 / 100.0).roundToInt()
 
@@ -34,6 +35,7 @@ internal data class WidgetAppearance(
             .putInt("opacity", opacity.coerceIn(0, 100))
             .putBoolean("highContrast", highContrast)
             .putString("accent", accent.name)
+            .putBoolean("customOpacity", customOpacity)
             .apply()
         PlaybackWidget.redraw(context)
     }
@@ -51,7 +53,8 @@ internal data class WidgetAppearance(
                     else WidgetGlassMode.ADAPTIVE,
                 opacity = prefs.getInt("opacity", DEFAULT_OPACITY).coerceIn(0, 100),
                 highContrast = prefs.getBoolean("highContrast", false),
-                accent = WidgetAccent.entries.firstOrNull { it.name == accent } ?: WidgetAccent.SYSTEM
+                accent = WidgetAccent.entries.firstOrNull { it.name == accent } ?: WidgetAccent.SYSTEM,
+                customOpacity = prefs.getBoolean("customOpacity", false)
             )
         }
 

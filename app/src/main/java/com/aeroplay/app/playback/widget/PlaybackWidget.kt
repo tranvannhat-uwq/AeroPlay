@@ -217,7 +217,8 @@ class PlaybackWidget : AppWidgetProvider() {
                 setContentDescription(R.id.widget_toggle, context.getString(
                     if (state.pauseButton) R.string.playback_widget_pause else R.string.playback_widget_play
                 ))
-                setInt(R.id.widget_toggle, "setColorFilter", ink)
+                setInt(R.id.widget_toggle, "setColorFilter", colors.accent)
+                setInt(R.id.widget_glass_edge, "setColorFilter", colors.accent)
                 setInt(R.id.widget_toggle, "setBackgroundResource", if (dark) R.drawable.widget_orb_dark else R.drawable.widget_orb)
                 setOnClickPendingIntent(R.id.widget_toggle, if (state.title == null) open else command(context, ACTION_TOGGLE))
                 if (Build.VERSION.SDK_INT >= 31) {

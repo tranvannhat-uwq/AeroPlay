@@ -1,3 +1,10 @@
+AeroPlay 2.2.7
+
+- Sửa tùy chỉnh độ đục widget. Kéo thanh trượt sẽ áp dụng đúng độ đục đã chọn và chuyển sang Độ đục tự chọn.
+- Thêm nút Áp dụng lại widget và trạng thái xác nhận trong Cài đặt → Giao diện widget.
+- Màu nhấn áp dụng cả vào nút phát và viền kính, kể cả khi chưa có bài đang phát.
+- Có thể chọn lại tương phản Tự động hoặc Cao để tăng độ rõ của chữ trên hình nền.
+
 AeroPlay 2.2.6
 
 - Widget có nút phát lớn (54–60 dp) và nút chuyển bài 48 dp. Hàng điều khiển giữ các nút chính khi diện tích hẹp.

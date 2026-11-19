@@ -38,7 +38,11 @@ internal data class AdaptiveWidgetColorScheme(
                 WidgetAccent.SYSTEM -> dynamic?.takeIf { contrast(it, rail) >= 3.2 } ?: cyan
             }
             val minimum = if (dark) darkMinimum else lightMinimum
-            val base = maxOf(appearance.fillAlpha, minimum, if (appearance.highContrast) 222 else 0)
+            val base = when {
+                appearance.highContrast -> maxOf(appearance.fillAlpha, minimum, 222)
+                appearance.customOpacity -> appearance.fillAlpha
+                else -> maxOf(appearance.fillAlpha, minimum)
+            }
             return AdaptiveWidgetColorScheme(dark, ink, secondary, accent, rail, base,
                 if (appearance.highContrast) 0 else 27)
         }
