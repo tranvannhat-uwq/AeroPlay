@@ -370,12 +370,13 @@ private fun AeroPlayAppRoot(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
-                            .padding(bottom = if (showBottomDock) bottomDockContentHeight else 0.dp)
                     ) {
+                        // Reserve the dock height at the end of each list, so scrolling content can pass behind the glass.
                         composable(AeroPlayDestination.HOME.route) {
                             val homeViewModel: HomeViewModel = hiltViewModel()
                             HomeScreen(
                                 viewModel = homeViewModel,
+                                bottomDockPadding = bottomDockContentHeight,
                                 onOpenSearch = {
                                     navController.navigate(AeroPlayDestination.SEARCH.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
@@ -390,7 +391,7 @@ private fun AeroPlayAppRoot(
 
                         composable(AeroPlayDestination.SEARCH.route) {
                             val searchViewModel: SearchViewModel = hiltViewModel()
-                            SearchScreen(viewModel = searchViewModel)
+                            SearchScreen(viewModel = searchViewModel, bottomDockPadding = bottomDockContentHeight)
                         }
 
                         composable(AeroPlayDestination.LIBRARY.route) {
@@ -401,12 +402,12 @@ private fun AeroPlayAppRoot(
                                     onDeviceLibraryOpened()
                                 }
                             }
-                            LibraryScreen(viewModel = libraryViewModel)
+                            LibraryScreen(viewModel = libraryViewModel, bottomDockPadding = bottomDockContentHeight)
                         }
 
                         composable(AeroPlayDestination.SETTINGS.route) {
                             val settingsViewModel: SettingsViewModel = hiltViewModel()
-                            SettingsScreen(viewModel = settingsViewModel)
+                            SettingsScreen(viewModel = settingsViewModel, bottomDockPadding = bottomDockContentHeight)
                         }
                     }
                 }

@@ -1,3 +1,9 @@
+AeroPlay 2.2.10
+
+- Bỏ lớp nền trắng trên thanh điều hướng và thanh phát thu nhỏ. Ảnh bìa và nội dung cuộn hiện xuyên qua lớp kính.
+- Làm mảnh viền kính, giữ chữ và nút dễ đọc trên ảnh sáng hoặc tối. Có lớp kính bán trong suốt khi tắt khúc xạ hoặc dùng Android cũ.
+- Chừa khoảng cuộn ở cuối Trang chủ, Tìm kiếm, Thư viện và Cài đặt để các mục cuối vẫn bấm được.
+
 AeroPlay 2.2.9
 
 - Thu gọn mini player thành thanh Liquid Glass ngang; bỏ khung phát video nổi để bớt che nội dung trang.

@@ -111,10 +111,10 @@ fun FloatingNavigationBar(
         animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.84f, stiffness = 520f),
         label = "Selected tab position"
     )
-    val activeColor = MaterialTheme.colorScheme.primary
-    val idleColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val indicatorTop = Color.White.copy(alpha = if (LocalGlassLight.current) 0.44f else 0.18f)
-    val indicatorBottom = activeColor.copy(alpha = if (LocalGlassLight.current) 0.12f else 0.22f)
+    val scheme = MaterialTheme.colorScheme
+    val activeColor = if (LocalGlassLight.current) scheme.onPrimaryContainer else scheme.primary
+    val idleColor = scheme.onSurface.copy(alpha = 0.88f)
+    val indicatorBrush = Brush.verticalGradient(listOf(scheme.primary.copy(alpha = 0.05f), scheme.primary.copy(alpha = 0.16f)))
     AeroGlassSurface(
         backdrop = backdrop,
         modifier = modifier
@@ -135,15 +135,13 @@ fun FloatingNavigationBar(
                         else destinations.lastIndex - indicatorPosition
                     val inset = 2.dp.toPx()
                     drawRoundRect(
-                        brush = Brush.verticalGradient(listOf(indicatorTop, indicatorBottom)),
+                        brush = indicatorBrush,
                         topLeft = Offset(index * slotWidth + inset, 0f),
                         size = Size((slotWidth - 2 * inset).coerceAtLeast(0f), size.height),
                         cornerRadius = CornerRadius(21.dp.toPx())
                     )
                     drawRoundRect(
-                        brush = Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.62f), activeColor.copy(alpha = 0.20f), Color.White.copy(alpha = 0.08f))
-                        ),
+                        color = scheme.primary.copy(alpha = 0.22f),
                         topLeft = Offset(index * slotWidth + inset, 0f),
                         size = Size((slotWidth - 2 * inset).coerceAtLeast(0f), size.height),
                         cornerRadius = CornerRadius(21.dp.toPx()),

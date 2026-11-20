@@ -66,6 +66,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -82,7 +83,8 @@ import com.aeroplay.app.core.model.VideoItem
 @Composable
 fun SearchScreen(
     viewModel: SearchViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomDockPadding: Dp = 0.dp
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val history by viewModel.searchHistory.collectAsStateWithLifecycle()
@@ -224,7 +226,8 @@ fun SearchScreen(
         SearchResultsList(
             isRefreshing = uiState.isRefreshing,
             canRefresh = uiState.query.isNotBlank() && !uiState.isLoading,
-            onRefresh = viewModel::refresh
+            onRefresh = viewModel::refresh,
+            bottomDockPadding = bottomDockPadding
         ) {
             // Local Search History Suggestions when query is empty
             if (uiState.query.trim().isEmpty()) {
@@ -420,10 +423,6 @@ fun SearchScreen(
                     }
                 }
             }
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-            }
         }
     }
 }
@@ -434,6 +433,7 @@ private fun SearchResultsList(
     isRefreshing: Boolean,
     canRefresh: Boolean,
     onRefresh: () -> Unit,
+    bottomDockPadding: Dp,
     content: LazyListScope.() -> Unit
 ) {
     val refreshState = rememberPullToRefreshState()
@@ -447,7 +447,7 @@ private fun SearchResultsList(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 20.dp + bottomDockPadding),
             verticalArrangement = Arrangement.spacedBy(6.dp),
             content = content
         )

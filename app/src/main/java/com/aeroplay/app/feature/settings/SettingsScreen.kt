@@ -61,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.aeroplay.app.core.designsystem.AeroPlaySurface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,7 +80,8 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomDockPadding: Dp = 0.dp
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val toastMessage by viewModel.statusToastMessage.collectAsStateWithLifecycle()
@@ -159,7 +161,7 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .padding(top = 12.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp + bottomDockPadding),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
@@ -515,10 +517,6 @@ fun SettingsScreen(
                     )
                 }
             }
-        }
-
-        item {
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

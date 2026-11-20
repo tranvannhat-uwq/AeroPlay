@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -113,6 +114,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -133,6 +135,7 @@ import com.aeroplay.app.core.designsystem.GlassBackground
 import com.aeroplay.app.core.designsystem.AeroGlassSurface
 import com.aeroplay.app.core.designsystem.AeroPlaySurface
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
+import com.aeroplay.app.core.designsystem.LocalGlassLight
 import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import androidx.compose.material.icons.filled.Block
 import com.aeroplay.app.core.model.PlaybackState
@@ -1060,6 +1063,8 @@ fun MiniPlayerBar(
 ) {
     val currentVideo = state.currentVideo ?: return
     val statusColors = LocalAeroPlayStatusColors.current
+    val scheme = MaterialTheme.colorScheme
+    val playTint = if (LocalGlassLight.current) scheme.onPrimaryContainer else statusColors.playButton
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var dragging by remember { mutableStateOf(false) }
     val gestureThreshold = with(LocalDensity.current) { 34.dp.toPx() }
@@ -1127,7 +1132,14 @@ fun MiniPlayerBar(
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .clickable(onClickLabel = "Mở rộng trình phát", onClick = onExpand),
+                                .fillMaxHeight()
+                                .clickable(
+                                    interactionSource = null,
+                                    indication = null,
+                                    role = Role.Button,
+                                    onClickLabel = "Mở rộng trình phát",
+                                    onClick = onExpand
+                                ),
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
@@ -1135,7 +1147,7 @@ fun MiniPlayerBar(
                                 style = MaterialTheme.typography.titleSmall,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = scheme.onSurface
                             )
                             if (currentVideo.channelName.isNotBlank()) {
                                 Text(
@@ -1143,7 +1155,7 @@ fun MiniPlayerBar(
                                     style = MaterialTheme.typography.bodySmall,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = scheme.onSurface.copy(alpha = 0.88f)
                                 )
                             }
                         }
@@ -1152,7 +1164,7 @@ fun MiniPlayerBar(
                             Icon(
                                 imageVector = if (state.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                 contentDescription = "Phát / Tạm dừng",
-                                tint = statusColors.playButton
+                                tint = playTint
                             )
                         }
 
@@ -1161,7 +1173,7 @@ fun MiniPlayerBar(
                                 Icon(
                                     imageVector = Icons.Filled.SkipNext,
                                     contentDescription = "Bài tiếp theo",
-                                    tint = MaterialTheme.colorScheme.onSurface
+                                    tint = scheme.onSurface
                                 )
                             }
                         }
@@ -1169,7 +1181,7 @@ fun MiniPlayerBar(
                             Icon(
                                 imageVector = Icons.Filled.Close,
                                 contentDescription = "Đóng trình phát",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = scheme.onSurface.copy(alpha = 0.88f)
                             )
                         }
                     }

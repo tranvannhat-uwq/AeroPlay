@@ -14,8 +14,10 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
@@ -23,9 +25,8 @@ import androidx.compose.ui.unit.dp
 import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.colorFilter
 import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.highlight.HighlightStyle
 
 val LocalGlassLight = staticCompositionLocalOf { true }
 
@@ -118,7 +119,7 @@ fun AeroPlaySurface(
 
 /**
  * Real-time floating Liquid Glass surface. The backdrop source must be a sibling of this surface.
- * Older Android versions and the user opt-out use a calm, legible material fallback.
+ * On older Android versions or when the effect is off, a translucent tint still lets content show through.
  */
 @Composable
 fun AeroGlassSurface(
@@ -131,51 +132,43 @@ fun AeroGlassSurface(
     val light = LocalGlassLight.current
     val scheme = MaterialTheme.colorScheme
     val sdk = Build.VERSION.SDK_INT
-    val supportsBackdropBlur = enabled && backdrop != null && sdk >= Build.VERSION_CODES.S
-
-    if (!supportsBackdropBlur) {
-        AeroPlaySurface(shape = shape, modifier = modifier, elevation = 1.dp, content = content)
-        return
-    }
-
+    val tint = if (light) scheme.primaryContainer else scheme.surface
     val edge = Brush.linearGradient(
         listOf(
-            Color.White.copy(alpha = if (light) 0.86f else 0.48f),
-            scheme.primary.copy(alpha = if (light) 0.28f else 0.32f),
-            AeroPlayBrand.Violet.copy(alpha = if (light) 0.20f else 0.25f),
-            Color.White.copy(alpha = if (light) 0.44f else 0.36f)
+            Color.White.copy(alpha = if (light) 0.48f else 0.34f),
+            scheme.primary.copy(alpha = 0.22f),
+            AeroPlayBrand.Violet.copy(alpha = 0.15f),
+            Color.White.copy(alpha = 0.20f)
         )
     )
-    val wash = Brush.linearGradient(
-        if (light) listOf(Color.White.copy(alpha = 0.21f), scheme.primary.copy(alpha = 0.045f), Color.White.copy(alpha = 0.13f))
-        else listOf(scheme.surface.copy(alpha = 0.28f), AeroPlayBrand.Cyan.copy(alpha = 0.045f), AeroPlayBrand.Violet.copy(alpha = 0.055f))
-    )
-    val glassBackdrop = requireNotNull(backdrop)
+    val glass = if (enabled && backdrop != null && sdk >= Build.VERSION_CODES.S) {
+        // Lighten dark samples or darken bright samples to keep the controls legible through the glass.
+        val contrast = ColorFilter.tint(
+            tint.copy(alpha = if (light) 0.65f else 0.68f),
+            if (light) BlendMode.Lighten else BlendMode.Darken
+        )
+        Modifier.drawBackdrop(
+            backdrop = backdrop,
+            shape = { shape },
+            effects = {
+                blur(18f)
+                if (sdk >= Build.VERSION_CODES.TIRAMISU) {
+                    lens(refractionHeight = 23f, refractionAmount = 20f)
+                }
+                colorFilter(contrast)
+            },
+            highlight = null,
+            shadow = null
+        )
+    } else {
+        Modifier.background(tint.copy(alpha = if (light) 0.58f else 0.62f))
+    }
 
     Box(
         modifier = modifier
             .clip(shape)
-            .drawBackdrop(
-                backdrop = glassBackdrop,
-                shape = { shape },
-                effects = {
-                    blur(18f)
-                    if (sdk >= Build.VERSION_CODES.TIRAMISU) {
-                        lens(refractionHeight = 23f, refractionAmount = 20f)
-                    }
-                },
-                highlight = {
-                    Highlight(
-                        width = 1.dp,
-                        blurRadius = 1.dp,
-                        alpha = 0.88f,
-                        style = HighlightStyle.Plain(color = Color.White.copy(alpha = 0.23f))
-                    )
-                },
-                shadow = null,
-                onDrawSurface = { drawRect(wash) }
-            )
-            .border(BorderStroke(0.85.dp, edge), shape),
+            .then(glass)
+            .border(BorderStroke(0.75.dp, edge), shape),
         content = content
     )
 }

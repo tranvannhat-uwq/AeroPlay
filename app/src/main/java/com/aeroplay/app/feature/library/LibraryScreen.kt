@@ -58,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -69,7 +70,8 @@ import com.aeroplay.app.core.model.VideoItem
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomDockPadding: Dp = 0.dp
 ) {
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -279,7 +281,7 @@ fun LibraryScreen(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp + bottomDockPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             when (selectedTab) {
@@ -603,10 +605,6 @@ fun LibraryScreen(
                         }
                     }
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
