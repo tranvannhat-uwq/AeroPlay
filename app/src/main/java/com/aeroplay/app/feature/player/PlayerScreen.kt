@@ -39,7 +39,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.safeDrawing
@@ -124,7 +123,6 @@ import androidx.core.text.HtmlCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
 import com.aeroplay.app.BuildConfig
@@ -1053,8 +1051,6 @@ fun FullPlayerOverlay(
 @Composable
 fun MiniPlayerBar(
     state: PlaybackState,
-    player: Player?,
-    videoOutput: PlayerVideoOutput,
     onExpand: () -> Unit,
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -1091,11 +1087,11 @@ fun MiniPlayerBar(
         dismissState.reset()
     }
 
-    Box(modifier.fillMaxWidth().padding(horizontal = 18.dp), contentAlignment = Alignment.CenterEnd) {
+    Box(modifier.fillMaxWidth().padding(horizontal = 18.dp), contentAlignment = Alignment.Center) {
         SwipeToDismissBox(
             state = dismissState,
             backgroundContent = {},
-            modifier = Modifier.widthIn(max = 216.dp).fillMaxWidth()
+            modifier = Modifier.fillMaxWidth()
         ) {
             AeroGlassSurface(
                 backdrop = backdrop,
@@ -1118,74 +1114,39 @@ fun MiniPlayerBar(
                             dragOffset = 0f
                         }
                     ),
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(24.dp),
             ) {
                 Column {
-                    Box(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(5.dp)
-                            .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(17.dp))
-                            .background(AeroPlayBrand.PlayerScrim)
-                            .clickable(onClickLabel = "Mở rộng trình phát", onClick = onExpand)
-                    ) {
-                        if (state.isAudioOnlyMode || state.isLoadingMetadata || state.error != null) {
-                            AsyncImage(
-                                model = currentVideo.thumbnailUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            PlayerVideoSurface(player, videoOutput, state.isMiniPlayerVisible, Modifier.fillMaxSize())
-                        }
-                        if (state.isBuffering || state.isLoadingMetadata) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.align(Alignment.Center).size(24.dp),
-                                color = AeroPlayBrand.PlayerForeground,
-                                strokeWidth = 2.dp
-                            )
-                        }
-                        Surface(
-                            modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
-                            shape = CircleShape,
-                            color = AeroPlayBrand.Navy.copy(alpha = 0.75f)
-                        ) {
-                            IconButton(onClick = onDismiss, modifier = Modifier.size(40.dp)) {
-                                Icon(Icons.Filled.Close, "Đóng trình phát", tint = AeroPlayBrand.PlayerForeground, modifier = Modifier.size(19.dp))
-                            }
-                        }
-                        if (state.isAudioOnlyMode) {
-                            Icon(
-                                Icons.Filled.Headphones,
-                                "Chỉ âm thanh",
-                                tint = AeroPlayBrand.PlayerForeground,
-                                modifier = Modifier.align(Alignment.BottomStart).padding(10.dp).size(20.dp)
-                            )
-                        }
-                        LinearProgressIndicator(
-                            progress = {
-                                if (state.durationMs > 0) (state.currentPositionMs.toFloat() / state.durationMs).coerceIn(0f, 1f) else 0f
-                            },
-                            modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.BottomCenter),
-                            color = AeroPlayBrand.Cyan,
-                            trackColor = AeroPlayBrand.PlayerForeground.copy(alpha = 0.27f)
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 3.dp),
+                            .height(62.dp)
+                            .padding(start = 16.dp, end = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = currentVideo.title,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f).clickable(
-                                onClickLabel = "Mở rộng trình phát", onClick = onExpand
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(onClickLabel = "Mở rộng trình phát", onClick = onExpand),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = currentVideo.title,
+                                style = MaterialTheme.typography.titleSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                        )
+                            if (currentVideo.channelName.isNotBlank()) {
+                                Text(
+                                    text = currentVideo.channelName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
 
                         IconButton(onClick = onTogglePlayPause) {
                             Icon(
@@ -1204,8 +1165,24 @@ fun MiniPlayerBar(
                                 )
                             }
                         }
-
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Đóng trình phát",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
+                    LinearProgressIndicator(
+                        progress = {
+                            if (state.durationMs > 0) {
+                                (state.currentPositionMs.toFloat() / state.durationMs).coerceIn(0f, 1f)
+                            } else 0f
+                        },
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = statusColors.playButton,
+                        trackColor = Color.Transparent
+                    )
                 }
             }
         }

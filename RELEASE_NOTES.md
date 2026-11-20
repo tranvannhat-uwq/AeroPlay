@@ -1,3 +1,9 @@
+AeroPlay 2.2.9
+
+- Thu gọn mini player thành thanh Liquid Glass ngang; bỏ khung phát video nổi để bớt che nội dung trang.
+- Hiển thị tên bài/kênh, tiến trình, phát/tạm dừng, bài tiếp và nút đóng. Chạm thông tin bài để mở lại trình phát; vuốt vẫn mở rộng hoặc đóng được.
+- Giữ nguyên Media3, MediaSession, phát nền, hàng đợi và dữ liệu hiện tại.
+
 AeroPlay 2.2.8
 
 - Làm mới giao diện toàn ứng dụng với bảng màu navy, cyan và violet; đồng bộ Trang chủ, Tìm kiếm, Thư viện, Cài đặt và trình phát.

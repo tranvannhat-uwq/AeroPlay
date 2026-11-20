@@ -23,7 +23,7 @@ import org.junit.runner.RunWith
 class FloatingPlayerUiTest {
     @get:Rule val compose = createEmptyComposeRule()
 
-    @Test fun swipeBetweenVideoViewsKeepsPlayingAndLetsUserBrowse() {
+    @Test fun compactPlaybackBarKeepsPlayingAndLetsUserBrowse() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val graph = EntryPointAccessors.fromApplication(context, YouTubeTestEntryPoint::class.java)
         val settings = runBlocking { graph.settings().getSettingsSnapshot() }
@@ -46,17 +46,10 @@ class FloatingPlayerUiTest {
                 compose.waitUntil(5_000) { playback.playbackState.value.isMiniPlayerVisible }
                 floating.assertIsDisplayed()
                 compose.waitUntil(5_000) { playback.playbackState.value.currentPositionMs > before + 500 }
-                activity.onActivity { host ->
-                    val texture = host.window.decorView.findTexture()
-                    check(texture?.isAvailable == true) { "The popup has no video texture" }
-                    val frame = requireNotNull(texture.bitmap)
-                    try {
-                        val pixels = IntArray(frame.width * frame.height)
-                        frame.getPixels(pixels, 0, frame.width, 0, 0, frame.width, frame.height)
-                        check(pixels.any { it and 0x00FFFFFF != 0 }) { "The popup displays a black frame" }
-                    } finally {
-                        frame.recycle()
-                    }
+                compose.waitUntil(5_000) {
+                    var hasNoVideoTexture = false
+                    activity.onActivity { host -> hasNoVideoTexture = host.window.decorView.findTexture() == null }
+                    hasNoVideoTexture
                 }
                 compose.onAllNodesWithContentDescription("Tìm kiếm").onLast().performClick()
                 compose.onNode(hasSetTextAction()).assertIsDisplayed()

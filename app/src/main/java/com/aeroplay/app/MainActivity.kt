@@ -320,7 +320,6 @@ private fun AeroPlayAppRoot(
 
     val playerViewModel: PlayerViewModel = hiltViewModel()
     val playbackState by playerViewModel.playbackState.collectAsStateWithLifecycle()
-    val player by playerViewModel.playerFlow.collectAsStateWithLifecycle()
     val videoOutput = remember { PlayerVideoOutput() }
     val reduceMotion = LocalAeroPlayStatusColors.current.reduceMotion
     val backdrop = rememberLayerBackdrop()
@@ -435,8 +434,6 @@ private fun AeroPlayAppRoot(
                     ) {
                         MiniPlayerBar(
                             state = playbackState,
-                            player = player,
-                            videoOutput = videoOutput,
                             backdrop = backdrop.takeIf { captureGlassSource },
                             onExpand = { playerViewModel.expandPlayer() },
                             onTogglePlayPause = { playerViewModel.togglePlayPause() },
