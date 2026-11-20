@@ -35,16 +35,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -60,7 +62,7 @@ import com.aeroplay.app.core.designsystem.AeroPlayTheme
 import com.aeroplay.app.core.designsystem.FloatingNavigationBar
 import com.aeroplay.app.core.designsystem.GlassBackground
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
-import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
+import com.aeroplay.app.core.designsystem.LocalAeroGlassEffectsEnabled
 import com.aeroplay.app.core.designsystem.LocalGlassLight
 import com.aeroplay.app.core.designsystem.OfflineBanner
 import com.aeroplay.app.core.model.AppSettings
@@ -86,6 +88,8 @@ import com.aeroplay.app.playback.pip.PipController
 import com.aeroplay.app.updates.AppUpdateManager
 import com.aeroplay.app.updates.AppUpdateDialogHost
 import dagger.hilt.android.AndroidEntryPoint
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -162,7 +166,10 @@ class MainActivity : ComponentActivity() {
                 )
             }
 
-            AeroPlayTheme(themeMode = settings.themeMode) {
+            AeroPlayTheme(
+                themeMode = settings.themeMode,
+                glassEffectsEnabled = settings.glassEffectsEnabled
+            ) {
                 val light = LocalGlassLight.current
                 SideEffect {
                     WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -316,8 +323,16 @@ private fun AeroPlayAppRoot(
     val player by playerViewModel.playerFlow.collectAsStateWithLifecycle()
     val videoOutput = remember { PlayerVideoOutput() }
     val reduceMotion = LocalAeroPlayStatusColors.current.reduceMotion
+    val backdrop = rememberLayerBackdrop()
+    val captureGlassSource = LocalAeroGlassEffectsEnabled.current &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        !playbackState.isFullPlayerOpen && !playbackState.isInPipMode
+    val contentSourceModifier = if (captureGlassSource) Modifier.layerBackdrop(backdrop) else Modifier
     val showFloatingPlayer = playbackState.isMiniPlayerVisible && playbackState.currentVideo != null &&
         !playbackState.isFullPlayerOpen && !playbackState.isInPipMode
+    val showBottomDock = !playbackState.isFullPlayerOpen && !playbackState.isInPipMode
+    val density = LocalDensity.current
+    var bottomDockContentHeight by remember { mutableStateOf(84.dp) }
     val screenAnimation = if (reduceMotion) 0 else 200
     LaunchedEffect(openDeviceLibrary, navBackStackEntry == null) {
         if (openDeviceLibrary && navBackStackEntry != null) {
@@ -335,19 +350,19 @@ private fun AeroPlayAppRoot(
         color = MaterialTheme.colorScheme.background
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            GlassBackground()
-            Scaffold(
-                contentWindowInsets = WindowInsets.safeDrawing,
-                containerColor = Color.Transparent,
-                topBar = {
-                    if (isOffline && !playbackState.isInPipMode) {
-                        Column(modifier = Modifier.statusBarsPadding()) {
-                            OfflineBanner()
+            Box(Modifier.fillMaxSize().then(contentSourceModifier)) {
+                GlassBackground()
+                Scaffold(
+                    contentWindowInsets = WindowInsets.safeDrawing,
+                    containerColor = Color.Transparent,
+                    topBar = {
+                        if (isOffline && !playbackState.isInPipMode) {
+                            Column(modifier = Modifier.statusBarsPadding()) {
+                                OfflineBanner()
+                            }
                         }
                     }
-                }
-            ) { innerPadding ->
-                CompositionLocalProvider(LocalFloatingPlayerInset provides if (showFloatingPlayer) 154.dp else 0.dp) {
+                ) { innerPadding ->
                     NavHost(
                         navController = navController,
                         startDestination = AeroPlayDestination.HOME.route,
@@ -356,6 +371,7 @@ private fun AeroPlayAppRoot(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
+                            .padding(bottom = if (showBottomDock) bottomDockContentHeight else 0.dp)
                     ) {
                         composable(AeroPlayDestination.HOME.route) {
                             val homeViewModel: HomeViewModel = hiltViewModel()
@@ -398,12 +414,15 @@ private fun AeroPlayAppRoot(
             }
 
             // Bottom Dock: MiniPlayerBar + FloatingNavigationBar
-            if (!playbackState.isFullPlayerOpen && !playbackState.isInPipMode) {
+            if (showBottomDock) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
+                        .onSizeChanged { size ->
+                            bottomDockContentHeight = with(density) { size.height.toDp() }
+                        }
                 ) {
                     AnimatedVisibility(
                         visible = showFloatingPlayer,
@@ -418,6 +437,7 @@ private fun AeroPlayAppRoot(
                             state = playbackState,
                             player = player,
                             videoOutput = videoOutput,
+                            backdrop = backdrop.takeIf { captureGlassSource },
                             onExpand = { playerViewModel.expandPlayer() },
                             onTogglePlayPause = { playerViewModel.togglePlayPause() },
                             onNext = { playerViewModel.playNext() },
@@ -427,6 +447,7 @@ private fun AeroPlayAppRoot(
 
                     FloatingNavigationBar(
                         currentRoute = currentRoute,
+                        backdrop = backdrop.takeIf { captureGlassSource },
                         onNavigate = { destination ->
                             if (currentRoute != destination.route) {
                                 navController.navigate(destination.route) {

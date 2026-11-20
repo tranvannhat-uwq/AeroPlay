@@ -67,7 +67,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
@@ -160,8 +159,8 @@ fun SearchScreen(
             singleLine = true,
             shape = RoundedCornerShape(20.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.64f)
             ),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(
@@ -423,7 +422,7 @@ fun SearchScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(96.dp + LocalFloatingPlayerInset.current))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

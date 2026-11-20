@@ -62,8 +62,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
-import com.aeroplay.app.core.designsystem.GlassSurface
+import com.aeroplay.app.core.designsystem.AeroPlaySurface
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.aeroplay.app.BuildConfig
@@ -242,6 +241,18 @@ fun SettingsScreen(
                         )
                     }
                 }
+                Spacer(Modifier.height(8.dp))
+                SettingsToggleRow(
+                    icon = Icons.Filled.AutoAwesome,
+                    title = "Hiệu ứng kính khúc xạ",
+                    subtitle = if (settings.glassEffectsEnabled) {
+                        "Bật cho thanh điều hướng và trình phát nổi; có thể tắt để giảm tải."
+                    } else {
+                        "Đang tắt khúc xạ; giao diện dùng bề mặt nhẹ, tiết kiệm hiệu năng hơn."
+                    },
+                    checked = settings.glassEffectsEnabled,
+                    onCheckedChange = viewModel::setGlassEffectsEnabled
+                )
             }
         }
 
@@ -507,7 +518,7 @@ fun SettingsScreen(
         }
 
         item {
-            Spacer(modifier = Modifier.height(96.dp + LocalFloatingPlayerInset.current))
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
@@ -523,7 +534,7 @@ private fun SettingsGroupCard(
     title: String,
     content: @Composable () -> Unit
 ) {
-    GlassSurface(
+    AeroPlaySurface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         elevation = 2.dp
@@ -665,6 +676,10 @@ private fun OpenSourceLicensesDialog(onDismiss: () -> Unit) {
                 )
                 Text(
                     text = "• AndroidX Media3 / ExoPlayer, Jetpack Compose, Room, DataStore, Hilt\n  Copyright (C) The Android Open Source Project\n  License: Apache License 2.0",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = "• Backdrop 1.0.6 by Kyant\n  Real-time Compose blur and refraction surfaces\n  License: Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0)",
                     style = MaterialTheme.typography.bodySmall
                 )
                 Text(

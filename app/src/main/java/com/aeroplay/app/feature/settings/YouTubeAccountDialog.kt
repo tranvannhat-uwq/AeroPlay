@@ -47,7 +47,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
-import com.aeroplay.app.core.designsystem.GlassSurface
+import com.aeroplay.app.core.designsystem.AeroPlaySurface
 import com.aeroplay.app.data.youtube.YouTubeAccountUiState
 import com.aeroplay.app.data.youtube.YouTubeChannelOption
 import com.aeroplay.app.data.youtube.YouTubePlaylist
@@ -325,7 +325,7 @@ private fun SectionTitle(title: String) {
 
 @Composable
 private fun AccountNote(text: String, progress: Boolean = false) {
-    GlassSurface(shape = RoundedCornerShape(12.dp), elevation = 1.dp) {
+    AeroPlaySurface(shape = RoundedCornerShape(12.dp), elevation = 1.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

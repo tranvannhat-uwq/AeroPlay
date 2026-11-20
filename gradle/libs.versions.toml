@@ -1,16 +1,16 @@
 [versions]
-agp = "8.7.2"
-kotlin = "2.0.21"
-ksp = "2.0.21-1.0.27"
+agp = "8.13.2"
+kotlin = "2.3.10"
+ksp = "2.3.10"
 coreKtx = "1.15.0"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
-composeBom = "2024.10.01"
+composeBom = "2026.02.00"
 navigationCompose = "2.8.4"
 media3 = "1.5.0"
-room = "2.6.1"
+room = "2.8.5"
 datastore = "1.1.1"
-hilt = "2.52"
+hilt = "2.58"
 hiltNavigationCompose = "1.2.0"
 okhttp = "4.12.0"
 coil = "2.7.0"
@@ -19,6 +19,7 @@ credentials = "1.5.0"
 googleId = "1.1.1"
 playServicesAuth = "22.0.0"
 newpipeExtractor = "v0.27.1"
+backdrop = "1.0.6"
 desugarJdkLibs = "2.1.2"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -38,6 +39,7 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+kyant-backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
 androidx-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 

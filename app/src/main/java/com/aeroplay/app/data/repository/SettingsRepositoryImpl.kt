@@ -30,6 +30,7 @@ class SettingsRepositoryImpl @Inject constructor(
 
     private object Keys {
         val THEME_MODE = stringPreferencesKey("theme_mode")
+        val GLASS_EFFECTS_ENABLED = booleanPreferencesKey("glass_effects_enabled")
         val SOURCE_TYPE = stringPreferencesKey("active_source_type")
         val WARNING_ACCEPTED = booleanPreferencesKey("experimental_warning_accepted")
         val DEFAULT_QUALITY = stringPreferencesKey("default_quality")
@@ -49,7 +50,7 @@ class SettingsRepositoryImpl @Inject constructor(
     override val settingsFlow: Flow<AppSettings> = context.aeroPlayDataStore.data.map { prefs ->
         val theme = prefs[Keys.THEME_MODE]?.let {
             runCatching { ThemeMode.valueOf(it) }.getOrNull()
-        } ?: ThemeMode.LIGHT
+        } ?: ThemeMode.SYSTEM
 
         val configuredSource = prefs[Keys.SOURCE_TYPE]?.let {
             runCatching { ContentSourceType.valueOf(it) }.getOrNull()
@@ -72,7 +73,8 @@ class SettingsRepositoryImpl @Inject constructor(
             backgroundPlaybackEnabled = prefs[Keys.BG_PLAYBACK] ?: true,
             autoPlaySimilarMusic = prefs[Keys.AUTO_SIMILAR_MUSIC] ?: true,
             ambientLightingEnabled = prefs[Keys.AMBIENT_LIGHTING] ?: false,
-            stableVolumeEnabled = prefs[Keys.STABLE_VOLUME] ?: false
+            stableVolumeEnabled = prefs[Keys.STABLE_VOLUME] ?: false,
+            glassEffectsEnabled = prefs[Keys.GLASS_EFFECTS_ENABLED] ?: true
         )
     }
 
@@ -80,6 +82,10 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override suspend fun setThemeMode(mode: ThemeMode) {
         context.aeroPlayDataStore.edit { it[Keys.THEME_MODE] = mode.name }
+    }
+
+    override suspend fun setGlassEffectsEnabled(enabled: Boolean) {
+        context.aeroPlayDataStore.edit { it[Keys.GLASS_EFFECTS_ENABLED] = enabled }
     }
 
     override suspend fun setActiveSourceType(sourceType: ContentSourceType, warningAccepted: Boolean) {

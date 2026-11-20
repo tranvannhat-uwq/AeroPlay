@@ -1,3 +1,10 @@
+AeroPlay 2.2.8
+
+- Làm mới giao diện toàn ứng dụng với bảng màu navy, cyan và violet; đồng bộ Trang chủ, Tìm kiếm, Thư viện, Cài đặt và trình phát.
+- Thêm bề mặt Liquid Glass khúc xạ cho thanh điều hướng và mini player, có thể bật/tắt trong Cài đặt; hiệu ứng tự dùng giao diện dự phòng trên Android cũ.
+- Giao diện mặc định theo chủ đề hệ thống, giữ lựa chọn Sáng/Tối và bố cục nội dung dễ đọc.
+- Giữ nguyên dữ liệu Room và các luồng Media3, phát nền, PiP, Android Auto, tìm kiếm, đề xuất cùng tài khoản.
+
 AeroPlay 2.2.7
 
 - Sửa tùy chỉnh độ đục widget. Kéo thanh trượt sẽ áp dụng đúng độ đục đã chọn và chuyển sang Độ đục tự chọn.

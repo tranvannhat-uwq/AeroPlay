@@ -59,11 +59,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.aeroplay.app.core.designsystem.CompactVideoRowCard
-import com.aeroplay.app.core.designsystem.GlassSurface
+import com.aeroplay.app.core.designsystem.AeroPlaySurface
 import com.aeroplay.app.core.model.UserPlaylist
 import com.aeroplay.app.core.model.VideoItem
 
@@ -224,8 +223,8 @@ fun LibraryScreen(
             singleLine = true,
             shape = RoundedCornerShape(18.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.64f)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -288,7 +287,7 @@ fun LibraryScreen(
                     if (deviceVideos.isEmpty() || mediaImport.busy || mediaImport.message.isNotBlank() ||
                         !backgroundPlaybackEnabled || pickerError != null) {
                         item {
-                            GlassSurface(shape = RoundedCornerShape(20.dp)) {
+                            AeroPlaySurface(shape = RoundedCornerShape(20.dp)) {
                                 Column(
                                     Modifier.padding(if (deviceVideos.isEmpty()) 16.dp else 12.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -607,7 +606,7 @@ fun LibraryScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(96.dp + LocalFloatingPlayerInset.current))
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

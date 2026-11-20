@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
@@ -29,7 +30,8 @@ require(updateRepository.matches(Regex("[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"))) { "I
 
 android {
     namespace = "com.aeroplay.app"
-    compileSdk = 35
+    // Backdrop 1.0.6 declares minCompileSdk 36. Keep targetSdk 35 and minSdk 26 unchanged.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.aeroplay.app"
@@ -71,8 +73,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
     }
 
     buildFeatures {
@@ -118,6 +122,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.kyant.backdrop)
 
     // Media3 / ExoPlayer
     implementation(libs.androidx.media3.exoplayer)

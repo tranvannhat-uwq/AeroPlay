@@ -4,6 +4,8 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -12,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -49,15 +53,20 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -73,6 +82,7 @@ import coil.compose.AsyncImage
 import com.aeroplay.app.core.common.FormatUtils
 import com.aeroplay.app.core.model.ContentSourceType
 import com.aeroplay.app.core.model.VideoItem
+import com.kyant.backdrop.backdrops.LayerBackdrop
 
 enum class AeroPlayDestination(
     val route: String,
@@ -89,6 +99,7 @@ enum class AeroPlayDestination(
 fun FloatingNavigationBar(
     currentRoute: String,
     onNavigate: (AeroPlayDestination) -> Unit,
+    backdrop: LayerBackdrop? = null,
     modifier: Modifier = Modifier
 ) {
     val reduceMotion = LocalAeroPlayStatusColors.current.reduceMotion
@@ -97,23 +108,25 @@ fun FloatingNavigationBar(
     val duration = if (reduceMotion) 0 else 220
     val indicatorPosition by animateFloatAsState(
         targetValue = selectedIndex.toFloat(),
-        animationSpec = tween(duration, easing = FastOutSlowInEasing),
+        animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.84f, stiffness = 520f),
         label = "Selected tab position"
     )
     val activeColor = MaterialTheme.colorScheme.primary
     val idleColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val indicatorColor = activeColor.copy(alpha = if (LocalGlassLight.current) 0.12f else 0.19f)
-    GlassSurface(
+    val indicatorTop = Color.White.copy(alpha = if (LocalGlassLight.current) 0.44f else 0.18f)
+    val indicatorBottom = activeColor.copy(alpha = if (LocalGlassLight.current) 0.12f else 0.22f)
+    AeroGlassSurface(
+        backdrop = backdrop,
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 10.dp),
-        shape = RoundedCornerShape(30.dp),
-        elevation = 9.dp,
-        translucent = false
+            .padding(horizontal = 18.dp, vertical = 7.dp)
+            .height(70.dp),
+        shape = RoundedCornerShape(35.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .fillMaxSize()
                 .padding(6.dp)
                 .selectableGroup()
                 .drawBehind {
@@ -122,16 +135,36 @@ fun FloatingNavigationBar(
                         else destinations.lastIndex - indicatorPosition
                     val inset = 2.dp.toPx()
                     drawRoundRect(
-                        color = indicatorColor,
+                        brush = Brush.verticalGradient(listOf(indicatorTop, indicatorBottom)),
                         topLeft = Offset(index * slotWidth + inset, 0f),
                         size = Size((slotWidth - 2 * inset).coerceAtLeast(0f), size.height),
                         cornerRadius = CornerRadius(21.dp.toPx())
+                    )
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.62f), activeColor.copy(alpha = 0.20f), Color.White.copy(alpha = 0.08f))
+                        ),
+                        topLeft = Offset(index * slotWidth + inset, 0f),
+                        size = Size((slotWidth - 2 * inset).coerceAtLeast(0f), size.height),
+                        cornerRadius = CornerRadius(21.dp.toPx()),
+                        style = Stroke(width = 0.8.dp.toPx())
                     )
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
             destinations.forEachIndexed { index, dest ->
                 val selected = selectedIndex == index
+                val interactionSource = remember(dest) { MutableInteractionSource() }
+                val pressed by interactionSource.collectIsPressedAsState()
+                val contentScale by animateFloatAsState(
+                    targetValue = when {
+                        pressed -> 0.96f
+                        selected -> 1.03f
+                        else -> 1f
+                    },
+                    animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.8f, stiffness = 640f),
+                    label = "Tab press scale"
+                )
                 val tint by animateColorAsState(
                     if (selected) activeColor else idleColor,
                     tween(duration, easing = FastOutSlowInEasing),
@@ -141,9 +174,12 @@ fun FloatingNavigationBar(
                 Column(
                     modifier = Modifier
                         .weight(1f)
+                        .fillMaxHeight()
+                        .defaultMinSize(minHeight = 48.dp)
                         .clip(RoundedCornerShape(21.dp))
                         .semantics { this.selected = selected }
-                        .clickable(interactionSource = null, indication = null, role = Role.Tab) {
+                        .graphicsLayer { scaleX = contentScale; scaleY = contentScale }
+                        .clickable(interactionSource = interactionSource, indication = null, role = Role.Tab) {
                             onNavigate(dest)
                         }
                         .padding(horizontal = 2.dp, vertical = 7.dp),
@@ -221,7 +257,7 @@ fun VideoFeedCard(
 ) {
     val statusColors = LocalAeroPlayStatusColors.current
 
-    GlassSurface(
+    AeroPlaySurface(
         modifier = modifier
             .fillMaxWidth()
             .clickable { onClick() },
@@ -379,7 +415,7 @@ fun CompactVideoRowCard(
 ) {
     val statusColors = LocalAeroPlayStatusColors.current
 
-    GlassSurface(
+    AeroPlaySurface(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))

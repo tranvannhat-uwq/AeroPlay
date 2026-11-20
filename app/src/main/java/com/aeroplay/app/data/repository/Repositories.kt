@@ -108,6 +108,7 @@ interface SettingsRepository {
     val settingsFlow: Flow<AppSettings>
     suspend fun getSettingsSnapshot(): AppSettings
     suspend fun setThemeMode(mode: ThemeMode)
+    suspend fun setGlassEffectsEnabled(enabled: Boolean)
     suspend fun setActiveSourceType(sourceType: ContentSourceType, warningAccepted: Boolean = true)
     suspend fun setDefaultQuality(qualityLabel: String)
     suspend fun setDataSaverEnabled(enabled: Boolean)

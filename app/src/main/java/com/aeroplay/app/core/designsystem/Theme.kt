@@ -21,14 +21,14 @@ import com.aeroplay.app.core.model.ThemeMode
 
 /** Brand colors shared by Compose, video overlays and the optional native embedded player. */
 object AeroPlayBrand {
-    val Midnight = Color(0xFF04091E)
-    val Navy = Color(0xFF0C1736)
-    val NavyRaised = Color(0xFF142447)
-    val Cyan = Color(0xFF65E9FF)
-    val Blue = Color(0xFF387DFF)
-    val Violet = Color(0xFFB6A0FF)
-    val Ink = Color(0xFF10233E)
-    val Cloud = Color(0xFFF2F9FF)
+    val Midnight = Color(0xFF07152B)
+    val Navy = Color(0xFF10213D)
+    val NavyRaised = Color(0xFF193253)
+    val Cyan = Color(0xFF5DE0F5)
+    val Blue = Color(0xFF3D7CFA)
+    val Violet = Color(0xFFAD96FF)
+    val Ink = Color(0xFF122746)
+    val Cloud = Color(0xFFF1F6FC)
     val PlayerScrim = Color(0xFF020718)
     val PlayerForeground = Color(0xFFF6FCFF)
 }
@@ -48,14 +48,14 @@ internal val AeroPlayDarkColors = darkColorScheme(
     tertiaryContainer = Color(0xFF47306F),
     onTertiaryContainer = Color(0xFFECDDFF),
     background = AeroPlayBrand.Midnight,
-    onBackground = Color(0xFFEAF4FF),
+    onBackground = Color(0xFFEAF3FF),
     surface = AeroPlayBrand.Navy,
     onSurface = Color(0xFFEAF4FF),
     surfaceVariant = AeroPlayBrand.NavyRaised,
     onSurfaceVariant = Color(0xFFB5C7DE),
     surfaceTint = AeroPlayBrand.Cyan,
-    surfaceContainerLowest = Color(0xFF03081A),
-    surfaceContainerLow = Color(0xFF09132D),
+    surfaceContainerLowest = Color(0xFF09162D),
+    surfaceContainerLow = Color(0xFF0C1B35),
     surfaceContainer = AeroPlayBrand.Navy,
     surfaceContainerHigh = Color(0xFF122143),
     surfaceContainerHighest = Color(0xFF1C2E50),
@@ -73,31 +73,31 @@ internal val AeroPlayDarkColors = darkColorScheme(
 )
 
 internal val AeroPlayLightColors = lightColorScheme(
-    primary = Color(0xFF00657E),
+    primary = Color(0xFF176FD5),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFB9EEFF),
-    onPrimaryContainer = Color(0xFF003544),
+    primaryContainer = Color(0xFFDCEBFF),
+    onPrimaryContainer = Color(0xFF153866),
     inversePrimary = AeroPlayBrand.Cyan,
-    secondary = Color(0xFF2555B6),
+    secondary = Color(0xFF536A8C),
     onSecondary = Color.White,
     secondaryContainer = Color(0xFFDCE7FF),
     onSecondaryContainer = Color(0xFF123570),
-    tertiary = Color(0xFF7044A7),
+    tertiary = Color(0xFF7956C7),
     onTertiary = Color.White,
     tertiaryContainer = Color(0xFFEDDDFF),
     onTertiaryContainer = Color(0xFF38205C),
     background = AeroPlayBrand.Cloud,
     onBackground = AeroPlayBrand.Ink,
-    surface = Color(0xFFFBFDFF),
+    surface = Color(0xFFFCFDFF),
     onSurface = AeroPlayBrand.Ink,
-    surfaceVariant = Color(0xFFE2EFFA),
-    onSurfaceVariant = Color(0xFF425974),
-    surfaceTint = Color(0xFF00657E),
+    surfaceVariant = Color(0xFFE5EEF9),
+    onSurfaceVariant = Color(0xFF536985),
+    surfaceTint = Color(0xFF176FD5),
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF0F7FE),
-    surfaceContainer = Color(0xFFEBF3FD),
-    surfaceContainerHigh = Color(0xFFE3EFFA),
-    surfaceContainerHighest = Color(0xFFDCE8F5),
+    surfaceContainerLow = Color(0xFFF4F8FE),
+    surfaceContainer = Color(0xFFEDF4FC),
+    surfaceContainerHigh = Color(0xFFE7F0FA),
+    surfaceContainerHighest = Color(0xFFDDE9F7),
     surfaceBright = Color(0xFFFBFDFF),
     surfaceDim = Color(0xFFD7E3EF),
     outline = Color(0xFF627C96),
@@ -112,6 +112,13 @@ internal val AeroPlayLightColors = lightColorScheme(
 )
 
 val AeroPlayTypography = Typography(
+    headlineSmall = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 21.sp,
+        lineHeight = 27.sp,
+        letterSpacing = (-0.35).sp
+    ),
     headlineMedium = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
@@ -169,10 +176,12 @@ data class AeroPlayStatusColors(
 )
 
 val LocalAeroPlayStatusColors = staticCompositionLocalOf { AeroPlayStatusColors() }
+val LocalAeroGlassEffectsEnabled = staticCompositionLocalOf { true }
 
 @Composable
 fun AeroPlayTheme(
-    themeMode: ThemeMode = ThemeMode.LIGHT,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    glassEffectsEnabled: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val systemDark = isSystemInDarkTheme()
@@ -210,7 +219,8 @@ fun AeroPlayTheme(
 
     CompositionLocalProvider(
         LocalAeroPlayStatusColors provides statusColors,
-        LocalGlassLight provides !useDark
+        LocalGlassLight provides !useDark,
+        LocalAeroGlassEffectsEnabled provides glassEffectsEnabled
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

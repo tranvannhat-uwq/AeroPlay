@@ -79,9 +79,8 @@ import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
 import com.aeroplay.app.core.designsystem.AeroPlayWordmark
 import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import com.aeroplay.app.core.designsystem.ErrorStateCard
-import com.aeroplay.app.core.designsystem.GlassSurface
+import com.aeroplay.app.core.designsystem.AeroPlaySurface
 import com.aeroplay.app.core.designsystem.RemotePlaylistDialog
-import com.aeroplay.app.core.designsystem.LocalFloatingPlayerInset
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.designsystem.SkeletonVideoCard
 import com.aeroplay.app.core.designsystem.SourceModePill
@@ -121,7 +120,6 @@ fun HomeScreen(
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val remotePlaylist by viewModel.remotePlaylistState.collectAsStateWithLifecycle()
     val refreshState = rememberPullToRefreshState()
-    val floatingInset = LocalFloatingPlayerInset.current
 
     var playlistTargetVideo by remember { mutableStateOf<VideoItem?>(null) }
     var showSourceSwitchDialog by remember { mutableStateOf(false) }
@@ -183,7 +181,7 @@ fun HomeScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 96.dp + floatingInset),
+            contentPadding = PaddingValues(bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // 1. Brand Header & Source Pill
@@ -205,7 +203,7 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Prominent Search Bar
-                    GlassSurface(
+                    AeroPlaySurface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(18.dp))
@@ -276,7 +274,7 @@ fun HomeScreen(
                 }
             } else {
                 item {
-                    GlassSurface(
+                    AeroPlaySurface(
                         shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
                     ) {

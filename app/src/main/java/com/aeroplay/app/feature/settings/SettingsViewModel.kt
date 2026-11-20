@@ -47,6 +47,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setGlassEffectsEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setGlassEffectsEnabled(enabled)
+        }
+    }
+
     fun setSourceType(sourceType: ContentSourceType) {
         viewModelScope.launch {
             settingsRepository.setActiveSourceType(sourceType, warningAccepted = true)

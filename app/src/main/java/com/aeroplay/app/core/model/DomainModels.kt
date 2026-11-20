@@ -275,7 +275,7 @@ enum class ThemeMode(val label: String) {
 }
 
 data class AppSettings(
-    val themeMode: ThemeMode = ThemeMode.LIGHT,
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
     val activeSourceType: ContentSourceType = ContentSourceType.DEMO_LOCAL,
     val experimentalWarningAccepted: Boolean = false,
     val defaultQualityLabel: String = "720p",
@@ -287,5 +287,6 @@ data class AppSettings(
     val backgroundPlaybackEnabled: Boolean = true,
     val autoPlaySimilarMusic: Boolean = true,
     val ambientLightingEnabled: Boolean = false,
-    val stableVolumeEnabled: Boolean = false
+    val stableVolumeEnabled: Boolean = false,
+    val glassEffectsEnabled: Boolean = true
 )

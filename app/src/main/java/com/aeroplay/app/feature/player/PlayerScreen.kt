@@ -132,7 +132,8 @@ import com.aeroplay.app.core.designsystem.AddToPlaylistDialog
 import com.aeroplay.app.core.designsystem.CompactVideoRowCard
 import com.aeroplay.app.core.designsystem.ErrorStateCard
 import com.aeroplay.app.core.designsystem.GlassBackground
-import com.aeroplay.app.core.designsystem.GlassSurface
+import com.aeroplay.app.core.designsystem.AeroGlassSurface
+import com.aeroplay.app.core.designsystem.AeroPlaySurface
 import com.aeroplay.app.core.designsystem.LocalAeroPlayStatusColors
 import com.aeroplay.app.core.designsystem.AeroPlayBrand
 import androidx.compose.material.icons.filled.Block
@@ -140,6 +141,7 @@ import com.aeroplay.app.core.model.PlaybackState
 import com.aeroplay.app.data.youtube.YouTubePolicyFeatureFlags
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import com.kyant.backdrop.backdrops.LayerBackdrop
 
 @Composable
 fun FullPlayerOverlay(
@@ -849,7 +851,7 @@ fun FullPlayerOverlay(
 
                     if (channelName.isNotBlank() || description.isNotBlank()) {
                         item {
-                            GlassSurface(
+                            AeroPlaySurface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
                                 elevation = 2.dp
@@ -1057,6 +1059,7 @@ fun MiniPlayerBar(
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onDismiss: () -> Unit,
+    backdrop: LayerBackdrop? = null,
     modifier: Modifier = Modifier
 ) {
     val currentVideo = state.currentVideo ?: return
@@ -1094,7 +1097,8 @@ fun MiniPlayerBar(
             backgroundContent = {},
             modifier = Modifier.widthIn(max = 216.dp).fillMaxWidth()
         ) {
-            GlassSurface(
+            AeroGlassSurface(
+                backdrop = backdrop,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("FloatingVideoPlayer")
@@ -1115,7 +1119,6 @@ fun MiniPlayerBar(
                         }
                     ),
                 shape = RoundedCornerShape(22.dp),
-                elevation = 11.dp
             ) {
                 Column {
                     Box(
