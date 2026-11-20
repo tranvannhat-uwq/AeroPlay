@@ -25,8 +25,10 @@ jobs:
           cache: gradle
       - name: Install Android SDK 36
         run: |
-          printf 'y\n%.0s' {1..100} | sdkmanager --licenses >/dev/null
-          sdkmanager --install "platforms;android-36" "build-tools;36.0.0"
+          SDKMANAGER="$(command -v sdkmanager || find "$ANDROID_HOME" -type f -name sdkmanager -print -quit)"
+          test -x "$SDKMANAGER"
+          printf 'y\n%.0s' {1..100} | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0"
           test -f "$ANDROID_HOME/platforms/android-36/android.jar"
           test -x "$ANDROID_HOME/build-tools/36.0.0/aapt"
       - name: Restore private signing key
