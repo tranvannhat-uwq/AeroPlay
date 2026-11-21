@@ -1,3 +1,8 @@
+AeroPlay 2.2.11
+
+- Chuyển từ video sang Chỉ âm thanh nhanh hơn: giữ luồng đang phát và phần tiếng đã tải, kể cả khi bật tiết kiệm dữ liệu.
+- Tải thông tin nguồn song song với đọc vị trí xem dở. Khi phát theo phong cách, xử lý bài gợi ý sau khi đã yêu cầu trình phát nạp luồng.
+
 AeroPlay 2.2.10
 
 - Bỏ lớp nền trắng trên thanh điều hướng và thanh phát thu nhỏ. Ảnh bìa và nội dung cuộn hiện xuyên qua lớp kính.

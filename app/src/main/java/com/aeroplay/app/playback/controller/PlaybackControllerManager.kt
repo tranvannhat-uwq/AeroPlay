@@ -44,6 +44,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,6 +54,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.guava.await
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -101,9 +103,11 @@ class PlaybackControllerManager @Inject constructor(
     val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
     private var extractionJob: Job? = null
+    private var audioModeJob: Job? = null
     private var radioRecommendationJob: Job? = null
     private var progressPollingJob: Job? = null
     private var currentStreamSelection: ResolvedStreamSelection? = null
+    private var pendingStreamReady: Pair<String, Long>? = null
     private var hasAttemptedProgressiveFallback = false
     private var lastPersistedSecond = -1L
     private var historyRecordedForSelection = false
@@ -223,6 +227,12 @@ class PlaybackControllerManager @Inject constructor(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 SourceDiagnostics.event("player.state", "state=$playbackState")
+                if (playbackState == Player.STATE_READY) {
+                    pendingStreamReady?.takeIf { it.first == controller.currentMediaItem?.mediaId }?.let { (_, startedAt) ->
+                        SourceDiagnostics.event("player.ready", "elapsedMs=${SystemClock.elapsedRealtime() - startedAt}")
+                        pendingStreamReady = null
+                    }
+                }
                 val buffering = playbackState == Player.STATE_BUFFERING
                 val duration = controller.duration.takeIf { it > 0L }
                     ?: ((_playbackState.value.currentDetail?.durationSeconds ?: 0L) * 1000L)
@@ -461,7 +471,9 @@ class PlaybackControllerManager @Inject constructor(
         }
         persistCurrentPosition()
         extractionJob?.cancel()
+        audioModeJob?.cancel()
         radioRecommendationJob?.cancel()
+        pendingStreamReady = null
         historyRecordedForSelection = false
         completionRecordedForSelection = false
         lastSamplePositionMs = -1L
@@ -502,13 +514,21 @@ class PlaybackControllerManager @Inject constructor(
         }
 
         extractionJob = scope.launch {
+            val detailTask = async {
+                val loadStartedAt = SystemClock.elapsedRealtime()
+                metadataRepository.getVideoDetail(
+                    videoIdOrUrl = video.url.ifBlank { video.id },
+                    sourceHint = video.sourceType
+                ).also { result ->
+                    SourceDiagnostics.event("player.metadata", "elapsedMs=${SystemClock.elapsedRealtime() - loadStartedAt} success=${result.isSuccess}")
+                }
+            }
+            val savedPositionTask = async {
+                if (startFromBeginning) 0L else historyRepository.getSavedPosition(video.id)?.positionMs ?: 0L
+            }
             val settings = settingsRepository.getSettingsSnapshot()
-            val savedPosition = if (startFromBeginning) 0L else historyRepository.getSavedPosition(video.id)?.positionMs ?: 0L
-
-            val detailResult = metadataRepository.getVideoDetail(
-                videoIdOrUrl = video.url.ifBlank { video.id },
-                sourceHint = video.sourceType
-            )
+            val detailResult = detailTask.await()
+            val savedPosition = savedPositionTask.await()
 
             detailResult.fold(
                 onSuccess = { detail ->
@@ -550,39 +570,7 @@ class PlaybackControllerManager @Inject constructor(
                                 thumbnailUrl = detail.thumbnailUrl.ifBlank { video.thumbnailUrl },
                                 durationSeconds = detail.durationSeconds.takeIf { it > 0 } ?: video.durationSeconds
                             )
-                            val queueBeforeRecommendations = playbackRepository.activeQueue.value
-                            val readyQueue = if (queueBeforeRecommendations.radioMode &&
-                                queueBeforeRecommendations.currentItem?.id == updatedVideo.id
-                            ) {
-                                val recentAndPending = queueBeforeRecommendations.items
-                                val fresh = musicSuggestionRepository.filterPreferences(MusicRecommendationRanker.rank(
-                                    detail.relatedVideos,
-                                    updatedVideo,
-                                    currentDescription = detail.description,
-                                    forceMusic = true
-                                ))
-                                    .filterNot { suggestion ->
-                                        recentAndPending.any { existing ->
-                                            com.aeroplay.app.data.repository.SongIdentityResolver.likelySameSong(
-                                                existing.title, suggestion.title
-                                            )
-                                        }
-                                    }
-                                val latestQueue = playbackRepository.activeQueue.value
-                                if (latestQueue !== queueBeforeRecommendations) {
-                                    latestQueue
-                                } else {
-                                    val played = recentAndPending.take(latestQueue.currentIndex + 1).takeLast(12)
-                                    val pending = recentAndPending.drop(latestQueue.currentIndex + 1)
-                                    val compacted = (played + pending).distinctBy(RecommendationRanking::stableKey)
-                                    val updated = latestQueue.copy(
-                                        items = (compacted + fresh).take(80),
-                                        currentIndex = (played.size - 1).coerceAtLeast(0)
-                                    )
-                                    playbackRepository.updateQueue(updated)
-                                    updated
-                                }
-                            } else queueBeforeRecommendations
+                            val readyQueue = playbackRepository.activeQueue.value
                             _playbackState.update { state ->
                                 state.copy(
                                     currentVideo = updatedVideo,
@@ -608,7 +596,7 @@ class PlaybackControllerManager @Inject constructor(
                                 defaultSpeed = settings.defaultPlaybackSpeed
                             )
                             if (readyQueue.radioMode) {
-                                requestRadioRecommendations(updatedVideo, detail)
+                                requestRadioRecommendations(updatedVideo, detail, relatedQueue = readyQueue)
                             }
 
                         },
@@ -670,6 +658,7 @@ class PlaybackControllerManager @Inject constructor(
 
         val extras = Bundle().apply {
             putString(AeroPlayMediaService.EXTRA_PRIMARY_MIME_TYPE, selection.mimeType)
+            putBoolean(AeroPlayMediaService.EXTRA_DISABLE_VIDEO_TRACK, _playbackState.value.isAudioOnlyMode)
             if (selection.isMergedAdaptive && !selection.secondaryAudioUrl.isNullOrBlank()) {
                 putString(AeroPlayMediaService.EXTRA_SECONDARY_AUDIO_URL, selection.secondaryAudioUrl)
                 putString(AeroPlayMediaService.EXTRA_SECONDARY_AUDIO_MIME_TYPE, selection.selectedAudioTrack?.formatMimeType)
@@ -706,6 +695,7 @@ class PlaybackControllerManager @Inject constructor(
             mediaItemBuilder.setMimeType(selection.mimeType)
         }
 
+        pendingStreamReady = video.id to SystemClock.elapsedRealtime()
         controller.setMediaItem(mediaItemBuilder.build(), startPositionMs.coerceAtLeast(0L))
         SourceDiagnostics.event("player.prepare", "mime=${selection.mimeType} merged=${selection.isMergedAdaptive}")
         controller.setPlaybackSpeed(defaultSpeed ?: _playbackState.value.playbackSpeed)
@@ -931,20 +921,41 @@ class PlaybackControllerManager @Inject constructor(
         }
     }
 
-    fun setAudioOnlyMode(enabled: Boolean) {
+    fun setAudioOnlyMode(enabled: Boolean) = setAudioOnlyMode(enabled, preferDedicatedAudio = false)
+
+    private fun setAudioOnlyMode(enabled: Boolean, preferDedicatedAudio: Boolean) {
+        audioModeJob?.cancel()
         val state = _playbackState.value
-        if (state.isAudioOnlyMode == enabled) return
+        if (state.isAudioOnlyMode == enabled || carAudioOverride) return
         val detail = state.currentDetail ?: run {
             _playbackState.update { it.copy(isAudioOnlyMode = enabled) }
             return
         }
         val video = state.currentVideo ?: return
         val controller = mediaController ?: return
-        val currentPos = controller.currentPosition.coerceAtLeast(0L)
-        val wasPlaying = controller.isPlaying
+        val currentSelection = currentStreamSelection
 
-        scope.launch {
+        // A manual toggle keeps the playing item and its audio buffer. Data saver
+        // still applies when resolving the next item or switching for background play.
+        if (!preferDedicatedAudio && currentSelection?.isAudioOnly == false &&
+            state.error == null && controller.currentMediaItem?.mediaId == video.id &&
+            controller.currentTracks.isTypeSelected(C.TRACK_TYPE_AUDIO) &&
+            controller.isCommandAvailable(Player.COMMAND_SET_TRACK_SELECTION_PARAMETERS)
+        ) {
+            controller.trackSelectionParameters = controller.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, enabled)
+                .build()
+            _playbackState.update { it.copy(isAudioOnlyMode = enabled) }
+            SourceDiagnostics.event("player.audio_mode", "enabled=$enabled reusedStream=true")
+            return
+        }
+
+        audioModeJob = scope.launch {
             val settings = settingsRepository.getSettingsSnapshot()
+            if (_playbackState.value.currentDetail !== detail || currentStreamSelection !== currentSelection ||
+                controller.currentMediaItem?.mediaId != video.id || carAudioOverride
+            ) return@launch
+
             val resolved = streamResolver.resolveStream(
                 detail = detail,
                 preferredVariantId = state.selectedStreamVariant?.id,
@@ -953,6 +964,8 @@ class PlaybackControllerManager @Inject constructor(
                 dataSaver = settings.dataSaverEnabled
             ).getOrNull() ?: return@launch
 
+            val currentPos = controller.currentPosition.coerceAtLeast(0L)
+            val wasPlaying = controller.playWhenReady
             _playbackState.update {
                 it.copy(
                     isAudioOnlyMode = enabled,
@@ -969,6 +982,7 @@ class PlaybackControllerManager @Inject constructor(
                 startPositionMs = currentPos,
                 autoPlay = wasPlaying
             )
+            SourceDiagnostics.event("player.audio_mode", "enabled=$enabled reusedStream=false")
         }
     }
 
@@ -1092,10 +1106,49 @@ class PlaybackControllerManager @Inject constructor(
         }
     }
 
-    private fun requestRadioRecommendations(video: VideoItem?, detail: VideoDetail?) {
-        if (video == null || detail == null || !video.sourceType.isExperimental) return
+    private suspend fun appendRelatedRadioTracks(queue: PlaybackQueue, video: VideoItem, detail: VideoDetail) {
+        val current = queue.currentItem
+        if (current?.id != video.id || current.sourceType != video.sourceType) return
+        val fresh = try {
+            withContext(Dispatchers.Default) {
+                val ranked = MusicRecommendationRanker.rank(
+                    detail.relatedVideos, video, currentDescription = detail.description, forceMusic = true
+                )
+                musicSuggestionRepository.filterPreferences(ranked).filterNot { suggestion ->
+                    queue.items.any { item ->
+                        com.aeroplay.app.data.repository.SongIdentityResolver.likelySameSong(item.title, suggestion.title)
+                    }
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            SourceDiagnostics.failure("radio.related", error)
+            return
+        }
+        if (playbackRepository.activeQueue.value !== queue) return
+        val played = queue.items.take(queue.currentIndex + 1).takeLast(12)
+        val pending = queue.items.drop(queue.currentIndex + 1)
+        val compacted = (played + pending).distinctBy(RecommendationRanking::stableKey)
+        val updated = queue.copy(items = (compacted + fresh).take(80), currentIndex = played.lastIndex.coerceAtLeast(0))
+        playbackRepository.updateQueue(updated)
+        _playbackState.update { it.copy(queue = updated) }
+    }
+
+    private fun requestRadioRecommendations(video: VideoItem?, detail: VideoDetail?, relatedQueue: PlaybackQueue? = null) {
+        if (video == null || detail == null || (relatedQueue == null && !video.sourceType.isExperimental)) return
         if (radioRecommendationJob?.isActive == true) return
         radioRecommendationJob = scope.launch {
+            if (relatedQueue != null) {
+                appendRelatedRadioTracks(relatedQueue, video, detail)
+                val active = playbackRepository.activeQueue.value
+                if (!active.radioMode || active.currentItem?.id != video.id) return@launch
+                if (active.hasNext && canAutoAdvanceEndedRadio()) {
+                    playNext()
+                    return@launch
+                }
+            }
+            if (!video.sourceType.isExperimental) return@launch
             val suggestions = musicSuggestionRepository.suggestions(video, detail.description, detail.relatedVideos)
             val active = playbackRepository.activeQueue.value
             if (!active.radioMode || active.currentItem?.id != video.id) return@launch
@@ -1113,9 +1166,12 @@ class PlaybackControllerManager @Inject constructor(
             _playbackState.update { state ->
                 if (state.currentVideo?.id == video.id) state.copy(queue = updated) else state
             }
-            if (mediaController?.playbackState == Player.STATE_ENDED && autoPlaySimilarMusic) playNext()
+            if (canAutoAdvanceEndedRadio()) playNext()
         }
     }
+
+    private fun canAutoAdvanceEndedRadio(): Boolean =
+        autoPlaySimilarMusic && mediaController?.let { it.playWhenReady && it.playbackState == Player.STATE_ENDED } == true
 
     fun minimizeToMiniPlayer() {
         if (_playbackState.value.currentVideo != null) {
@@ -1160,7 +1216,7 @@ class PlaybackControllerManager @Inject constructor(
                 !_playbackState.value.isInPipMode &&
                 !_playbackState.value.isAudioOnlyMode
             ) {
-                setAudioOnlyMode(true)
+                setAudioOnlyMode(true, preferDedicatedAudio = true)
             }
         }
     }
@@ -1168,6 +1224,8 @@ class PlaybackControllerManager @Inject constructor(
     fun dismissPlayer() {
         persistCurrentPosition()
         extractionJob?.cancel()
+        audioModeJob?.cancel()
+        pendingStreamReady = null
         mediaController?.stop()
         mediaController?.clearMediaItems()
         _playbackState.update {
@@ -1200,7 +1258,9 @@ class PlaybackControllerManager @Inject constructor(
         if (changed) {
             old.currentVideo?.let { flushWatchedDuration(it.id, old.durationMs, old.currentPositionMs) }
             extractionJob?.cancel()
+            audioModeJob?.cancel()
             radioRecommendationJob?.cancel()
+            pendingStreamReady = null
             currentStreamSelection = null
             pendingWatchedMs = 0
             sessionWatchedMs = 0

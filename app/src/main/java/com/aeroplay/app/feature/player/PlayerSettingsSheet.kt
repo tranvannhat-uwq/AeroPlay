@@ -242,7 +242,7 @@ internal fun PlayerSettingsSheet(
                                 if (variant.isVideoOnly) "Video riêng • ghép với âm thanh" else "Luồng có hình và tiếng",
                                 selected = variant.id == selectedVariantId, onClick = { onQuality(variant) })
                         }
-                        item { SettingsRow(Icons.Filled.Headphones, "Chỉ âm thanh", "Giảm dữ liệu nếu nguồn có luồng âm thanh riêng", selected = isAudioOnly, onClick = { onAudioOnly(!isAudioOnly) }) }
+                        item { SettingsRow(Icons.Filled.Headphones, "Chỉ âm thanh", "Tắt hình trên bài đang phát. Ưu tiên luồng tiếng riêng khi chuyển bài.", selected = isAudioOnly, onClick = { onAudioOnly(!isAudioOnly) }) }
                         if (variants.isEmpty()) item { InfoText("Nguồn hiện tại không cung cấp danh sách chất lượng riêng.") }
                     }
 

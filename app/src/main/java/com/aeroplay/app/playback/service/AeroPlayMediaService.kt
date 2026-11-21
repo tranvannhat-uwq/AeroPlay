@@ -63,6 +63,7 @@ class AeroPlayMediaService : MediaLibraryService() {
         const val EXTRA_SECONDARY_AUDIO_URL = "com.aeroplay.app.EXTRA_SECONDARY_AUDIO_URL"
         const val EXTRA_PRIMARY_MIME_TYPE = "com.aeroplay.app.EXTRA_PRIMARY_MIME_TYPE"
         const val EXTRA_SECONDARY_AUDIO_MIME_TYPE = "com.aeroplay.app.EXTRA_SECONDARY_AUDIO_MIME_TYPE"
+        const val EXTRA_DISABLE_VIDEO_TRACK = "com.aeroplay.app.EXTRA_DISABLE_VIDEO_TRACK"
         const val ACTION_SET_NOISY_HANDLING = "com.aeroplay.app.ACTION_SET_NOISY_HANDLING"
         const val EXTRA_NOISY_ENABLED = "com.aeroplay.app.EXTRA_NOISY_ENABLED"
         const val ACTION_SET_STABLE_VOLUME = "com.aeroplay.app.ACTION_SET_STABLE_VOLUME"
@@ -161,8 +162,12 @@ class AeroPlayMediaService : MediaLibraryService() {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val carVideo = CarMediaLibrary.summary(mediaItem)
                 if (sleepTimerVideoId != null && mediaItem?.mediaId != sleepTimerVideoId) clearSleepTimer()
-                exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, carVideo != null).build()
+                if (reason != Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT) {
+                    val disableVideo = carVideo != null ||
+                        mediaItem?.mediaMetadata?.extras?.getBoolean(EXTRA_DISABLE_VIDEO_TRACK) == true
+                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                        .setTrackTypeDisabled(C.TRACK_TYPE_VIDEO, disableVideo).build()
+                }
                 carProgressJob?.cancel()
                 if (carVideo != null) {
                     carProgressJob = serviceScope.launch {
