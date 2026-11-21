@@ -9,15 +9,16 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="7dp">
+        android:padding="9dp">
         <FrameLayout
             android:id="@+id/widget_art_frame"
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:layout_gravity="center"
+            android:layout_marginBottom="9dp"
             android:background="@drawable/widget_art_frame"
             android:clipToOutline="true"
-            android:padding="2dp">
+            android:padding="1dp">
             <ImageView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -28,26 +29,26 @@
                 android:clipToOutline="true" />
         </FrameLayout>
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="24dp"
+            android:layout_width="wrap_content"
+            android:layout_height="21dp"
             android:orientation="horizontal"
             android:id="@+id/widget_heading"
             android:gravity="center_vertical">
             <ImageView
-                android:layout_width="21dp"
-                android:layout_height="21dp"
+                android:layout_width="19dp"
+                android:layout_height="19dp"
                 android:id="@+id/widget_logo"
                 android:src="@mipmap/ic_launcher" />
         </LinearLayout>
         <ImageView
-            android:layout_width="60dp"
-            android:layout_height="60dp"
+            android:layout_width="54dp"
+            android:layout_height="54dp"
             android:id="@+id/widget_toggle"
             android:src="@drawable/ic_widget_play"
-            android:padding="13dp"
+            android:padding="11dp"
             android:scaleType="fitCenter"
             android:tint="@color/widget_ink"
-            android:background="@drawable/widget_orb"
+            android:background="@drawable/widget_orb_preview"
             android:contentDescription="@string/playback_widget_play"
             android:layout_gravity="bottom|center_horizontal" />
     </FrameLayout>

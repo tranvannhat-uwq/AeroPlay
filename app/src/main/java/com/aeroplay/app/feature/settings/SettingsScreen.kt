@@ -290,7 +290,7 @@ fun SettingsScreen(
                     )
                     Text(
                         if (widgetAppearance.customOpacity && !widgetAppearance.highContrast)
-                            "Đang dùng độ đục bạn chọn. Tăng độ đục nếu chữ khó đọc."
+                            "Giữ độ đục bạn chọn và chọn màu chữ theo màu nền ước tính."
                         else "Tương phản tự động có thể tăng độ đục nền để chữ rõ hơn.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

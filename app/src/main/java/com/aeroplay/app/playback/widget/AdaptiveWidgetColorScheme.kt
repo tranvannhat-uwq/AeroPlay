@@ -1,5 +1,6 @@
 package com.aeroplay.app.playback.widget
 
+import android.app.WallpaperManager
 import android.content.Context
 import android.os.Build
 import kotlin.math.pow
@@ -7,6 +8,7 @@ import kotlin.math.roundToInt
 
 internal data class AdaptiveWidgetColorScheme(
     val dark: Boolean,
+    val lightInk: Boolean,
     val ink: Int,
     val secondary: Int,
     val accent: Int,
@@ -15,47 +17,66 @@ internal data class AdaptiveWidgetColorScheme(
     val opticsAlpha: Int
 ) {
     companion object {
-        private val lightMinimum by lazy { minimumAlpha(false, 0xFF293C58.toInt()) }
-        private val darkMinimum by lazy { minimumAlpha(true, 0xFFE2EBFF.toInt()) }
+        private const val DARK_INK = 0xFF0B172A.toInt()
+        private const val LIGHT_INK = 0xFFF8FAFF.toInt()
+        private const val DARK_SECONDARY = 0xFF253751.toInt()
+        private const val LIGHT_SECONDARY = 0xFFE4EDFC.toInt()
 
         fun resolve(context: Context, appearance: WidgetAppearance): AdaptiveWidgetColorScheme {
-            val dark = appearance.isDark(context)
+            val wallpaper = if (Build.VERSION.SDK_INT >= 27) runCatching {
+                WallpaperManager.getInstance(context)
+                    .getWallpaperColors(WallpaperManager.FLAG_SYSTEM)?.primaryColor?.toArgb()
+            }.getOrNull() else null
+            val dark = appearance.isDark(context, wallpaper)
             val dynamic = if (appearance.accent == WidgetAccent.SYSTEM && Build.VERSION.SDK_INT >= 31) {
-                context.getColor(if (dark) android.R.color.system_accent1_200 else android.R.color.system_accent1_800)
+                context.getColor(android.R.color.system_accent1_500)
             } else null
-            return create(dark, appearance, dynamic)
+            return create(dark, appearance, dynamic, wallpaper)
         }
 
-        fun create(dark: Boolean, appearance: WidgetAppearance, dynamic: Int? = null): AdaptiveWidgetColorScheme {
-            val ink = if (dark) 0xFFF6F9FF.toInt() else 0xFF142653.toInt()
-            val secondary = if (dark) 0xFFE2EBFF.toInt() else 0xFF293C58.toInt()
-            val rail = if (dark) 0xFF546981.toInt() else 0xFF8293AE.toInt()
-            val cyan = if (dark) 0xFFA7EFFF.toInt() else 0xFF004A66.toInt()
-            val violet = if (dark) 0xFFE4C9FF.toInt() else 0xFF4C246D.toInt()
+        internal fun prefersDarkGlass(wallpaper: Int): Boolean = luminance(wallpaper) < 0.36
+
+        fun create(dark: Boolean, appearance: WidgetAppearance, dynamic: Int? = null,
+                   wallpaper: Int? = null): AdaptiveWidgetColorScheme {
+            val custom = appearance.customOpacity && !appearance.highContrast
+            val surface = if (dark) 0xFF14203B.toInt() else 0xFFE9F1FC.toInt()
+            val sample = wallpaper?.let { blend(it, surface, appearance.fillAlpha) }
+            val lightInk = if (custom && sample != null) contrast(LIGHT_INK, sample) > contrast(DARK_INK, sample) else dark
+            val ink = if (lightInk) LIGHT_INK else DARK_INK
+            val secondary = when {
+                custom -> ink
+                lightInk -> LIGHT_SECONDARY
+                else -> DARK_SECONDARY
+            }
+            val rail = if (lightInk) 0xFF425571.toInt() else 0xFFB6C6DC.toInt()
+            val cyan = if (lightInk) 0xFF9FEFFF.toInt() else 0xFF004A66.toInt()
+            val violet = if (lightInk) 0xFFE2C5FF.toInt() else 0xFF51297D.toInt()
             val accent = when (appearance.accent) {
                 WidgetAccent.CYAN -> cyan
                 WidgetAccent.VIOLET -> violet
-                WidgetAccent.SYSTEM -> dynamic?.takeIf { contrast(it, rail) >= 3.2 } ?: cyan
+                WidgetAccent.SYSTEM -> dynamic
+                    ?.let { blend(it, if (lightInk) -1 else 0xFF060E25.toInt(), if (lightInk) 116 else 134) }
+                    ?.takeIf { contrast(it, rail) >= 3.2 } ?: cyan
             }
-            val minimum = if (dark) darkMinimum else lightMinimum
             val base = when {
-                appearance.highContrast -> maxOf(appearance.fillAlpha, minimum, 222)
-                appearance.customOpacity -> appearance.fillAlpha
-                else -> maxOf(appearance.fillAlpha, minimum)
+                appearance.highContrast -> maxOf(appearance.fillAlpha, minimumAlpha(dark, secondary, null), 222)
+                custom -> appearance.fillAlpha
+                else -> maxOf(appearance.fillAlpha, minimumAlpha(dark, secondary, wallpaper))
             }
-            return AdaptiveWidgetColorScheme(dark, ink, secondary, accent, rail, base,
-                if (appearance.highContrast) 0 else 27)
+            return AdaptiveWidgetColorScheme(dark, lightInk, ink, secondary, accent, rail, base,
+                if (appearance.highContrast) 0 else 52)
         }
 
-        // Bound the worst case using white/black wallpaper and up to 8% additional optical tint.
-        private fun minimumAlpha(dark: Boolean, text: Int): Int =
-            (0..255).firstOrNull { contrast(text, worstSurface(dark, it)) >= 4.6 } ?: 255
+        private fun minimumAlpha(dark: Boolean, text: Int, wallpaper: Int?): Int =
+            (0..255).firstOrNull { contrast(text, worstSurface(dark, it, wallpaper)) >= 4.6 } ?: 255
 
-        internal fun worstSurface(dark: Boolean, alpha: Int): Int {
-            val wallpaper = if (dark) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
+        internal fun worstSurface(dark: Boolean, alpha: Int, wallpaper: Int? = null): Int {
+            val extreme = if (dark) -1 else 0xFF000000.toInt()
+            // The dominant wallpaper color isn't specific to the widget's position.
+            val backdrop = wallpaper?.let { blend(it, extreme, 158) } ?: extreme
             // Per-channel adverse bounds of the light and dark gradients.
-            val base = if (dark) 0xFF232543.toInt() else 0xFFEAE4F9.toInt()
-            return blend(blend(wallpaper, base, alpha), wallpaper, 20)
+            val base = if (dark) 0xFF272840.toInt() else 0xFFE3E2F6.toInt()
+            return blend(blend(backdrop, base, alpha), extreme, 26)
         }
 
         private fun blend(bottom: Int, top: Int, alpha: Int): Int {
@@ -67,14 +88,15 @@ internal data class AdaptiveWidgetColorScheme(
             return 0xFF000000.toInt() or (channel(16) shl 16) or (channel(8) shl 8) or channel(0)
         }
 
-        internal fun contrast(first: Int, second: Int): Double {
-            fun luminance(color: Int): Double {
-                fun linear(shift: Int): Double {
-                    val srgb = (color ushr shift and 255) / 255.0
-                    return if (srgb <= 0.04045) srgb / 12.92 else ((srgb + 0.055) / 1.055).pow(2.4)
-                }
-                return 0.2126 * linear(16) + 0.7152 * linear(8) + 0.0722 * linear(0)
+        private fun luminance(color: Int): Double {
+            fun linear(shift: Int): Double {
+                val srgb = (color ushr shift and 255) / 255.0
+                return if (srgb <= 0.04045) srgb / 12.92 else ((srgb + 0.055) / 1.055).pow(2.4)
             }
+            return 0.2126 * linear(16) + 0.7152 * linear(8) + 0.0722 * linear(0)
+        }
+
+        internal fun contrast(first: Int, second: Int): Double {
             val a = luminance(first) + 0.05
             val b = luminance(second) + 0.05
             return maxOf(a, b) / minOf(a, b)

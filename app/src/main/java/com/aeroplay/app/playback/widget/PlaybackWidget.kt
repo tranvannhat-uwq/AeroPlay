@@ -41,27 +41,28 @@ internal enum class WidgetSize {
 internal data class WidgetLayoutPlan(val width: Int, val height: Int, val fontScale: Float) {
     val size = WidgetSize.fromDp(width, height)
     private val fontExtra = ((fontScale - 1f).coerceAtLeast(0f) * 40).toInt()
-    val secondaryControls = size == WidgetSize.EXPANDED && width >= 280
+    val secondaryControls = size == WidgetSize.EXPANDED && width >= 288
     val heading = size != WidgetSize.WIDE || height >= 158 + fontExtra
     val artist = when (size) {
         WidgetSize.QUICK -> false
-        WidgetSize.WIDE -> height >= 143 + fontExtra
+        WidgetSize.WIDE -> height >= 130 + fontExtra
         WidgetSize.EXPANDED -> height >= 248 + fontExtra / 2
     }
-    val times = height >= (if (size == WidgetSize.EXPANDED) 267 else 165) + fontExtra
-    val nextItem = height >= 245 + fontExtra
-    val nextArtist = height >= 302 + fontExtra
+    val times = height >= (if (size == WidgetSize.EXPANDED) 267 else 168) + fontExtra
+    val nextItem = height >= 255 + fontExtra
+    val nextArtist = height >= 307 + fontExtra
     val coverDp = when (size) {
-        WidgetSize.QUICK -> minOf(144, height - 38, width - 24).coerceAtLeast(55)
+        WidgetSize.QUICK -> minOf(148, height - 28, width - 24).coerceAtLeast(55)
         WidgetSize.WIDE ->
-            minOf(88, width / 3, height - (if (heading) 103 else 74) - fontExtra).coerceAtLeast(42)
+            minOf(82, width / 3, height - (if (heading) 98 else 72) - fontExtra).coerceAtLeast(42)
         WidgetSize.EXPANDED -> {
-            val chrome = 189 + (if (times) 19 else 0) - (if (nextItem) 0 else 34)
-            minOf(126, width * 39 / 100, height - chrome - fontExtra).coerceAtLeast(58)
+            val chrome = 190 + (if (times) 15 else 0) + (if (nextArtist) 14 else 0) - (if (nextItem) 0 else 34)
+            val coverWidth = width * (if (height >= 352) 39 else 36) / 100
+            minOf(122, coverWidth, height - chrome - fontExtra).coerceAtLeast(54)
         }
     }
-    val titleLines = if (size == WidgetSize.EXPANDED && coverDp >= 94 && height >= 310 + fontExtra) 2 else 1
-    val quality = size == WidgetSize.EXPANDED && coverDp >= 88 && height >= 310 + fontExtra
+    val titleLines = if (size == WidgetSize.EXPANDED && coverDp >= 75 && height >= 288 + fontExtra * 2) 2 else 1
+    val quality = size == WidgetSize.EXPANDED && coverDp >= 92 && height >= 334 + fontExtra
     val expandedQueueLabel = width >= 266 + fontExtra
 }
 
@@ -192,6 +193,7 @@ class PlaybackWidget : AppWidgetProvider() {
             val state = snapshot
             val size = plan.size
             val dark = colors.dark
+            val darkControls = colors.lightInk
             val layout = when (size) {
                 WidgetSize.QUICK -> R.layout.playback_widget_small
                 WidgetSize.WIDE -> R.layout.playback_widget
@@ -203,8 +205,7 @@ class PlaybackWidget : AppWidgetProvider() {
             return RemoteViews(context.packageName, layout).apply {
                 setImageViewResource(R.id.widget_glass_fill,
                     if (dark) R.drawable.widget_pearl_dark else R.drawable.widget_pearl_background)
-                setInt(R.id.widget_glass_fill, "setImageAlpha",
-                    if (size == WidgetSize.QUICK && !appearance.highContrast) appearance.fillAlpha else colors.guardedAlpha)
+                setInt(R.id.widget_glass_fill, "setImageAlpha", colors.guardedAlpha)
                 setImageViewResource(R.id.widget_glass_optics, R.drawable.widget_glass_optics)
                 setInt(R.id.widget_glass_optics, "setImageAlpha", minOf(colors.opticsAlpha, appearance.fillAlpha))
                 setImageViewResource(R.id.widget_glass_edge,
@@ -218,8 +219,8 @@ class PlaybackWidget : AppWidgetProvider() {
                     if (state.pauseButton) R.string.playback_widget_pause else R.string.playback_widget_play
                 ))
                 setInt(R.id.widget_toggle, "setColorFilter", colors.accent)
-                setInt(R.id.widget_glass_edge, "setColorFilter", colors.accent)
-                setInt(R.id.widget_toggle, "setBackgroundResource", if (dark) R.drawable.widget_orb_dark else R.drawable.widget_orb)
+                setInt(R.id.widget_toggle, "setBackgroundResource",
+                    if (darkControls) R.drawable.widget_orb_dark else R.drawable.widget_orb)
                 setOnClickPendingIntent(R.id.widget_toggle, if (state.title == null) open else command(context, ACTION_TOGGLE))
                 if (Build.VERSION.SDK_INT >= 31) {
                     setViewLayoutWidth(R.id.widget_art_frame, plan.coverDp.toFloat(), TypedValue.COMPLEX_UNIT_DIP)
@@ -234,6 +235,8 @@ class PlaybackWidget : AppWidgetProvider() {
                     val showArtist = subtitle.isNotBlank() && plan.artist
                     setViewVisibility(R.id.widget_artist, if (showArtist) View.VISIBLE else View.GONE)
                     setTextColor(R.id.widget_track, ink)
+                    setOnClickPendingIntent(R.id.widget_track, open)
+                    setOnClickPendingIntent(R.id.widget_artist, open)
                     setTextColor(R.id.widget_brand, ink)
                     setTextColor(R.id.widget_artist, muted)
                     setTextColor(R.id.widget_elapsed, muted)
@@ -256,19 +259,21 @@ class PlaybackWidget : AppWidgetProvider() {
                         setTextViewText(R.id.widget_duration, FormatUtils.formatMillis(duration))
                     }
                     setOnClickPendingIntent(R.id.widget_progress, open)
-                    control(context, R.id.widget_previous, ACTION_PREVIOUS, state.hasPrevious, ink, dark)
-                    control(context, R.id.widget_next, ACTION_NEXT, state.hasNext, ink, dark)
+                    control(context, R.id.widget_previous, ACTION_PREVIOUS, state.hasPrevious, ink, darkControls)
+                    control(context, R.id.widget_next, ACTION_NEXT, state.hasNext, ink, darkControls)
                 }
                 if (size == WidgetSize.EXPANDED) {
                     setTextViewText(R.id.widget_quality, state.quality.orEmpty())
                     setViewVisibility(R.id.widget_quality, if (state.quality == null || !plan.quality) View.GONE else View.VISIBLE)
                     setTextColor(R.id.widget_quality, ink)
-                    val panel = if (dark) R.drawable.widget_button_dark else R.drawable.widget_button
+                    val panel = if (darkControls) R.drawable.widget_button_dark else R.drawable.widget_button
                     setInt(R.id.widget_quality, "setBackgroundResource", panel)
                     setViewVisibility(R.id.widget_favorite, if (plan.secondaryControls) View.VISIBLE else View.GONE)
                     setViewVisibility(R.id.widget_repeat, if (plan.secondaryControls) View.VISIBLE else View.GONE)
-                    control(context, R.id.widget_favorite, ACTION_FAVORITE, state.video != null, if (state.favorite) colors.accent else ink, dark, state.favorite)
-                    control(context, R.id.widget_repeat, ACTION_REPEAT, state.canRepeat, if (state.repeat) colors.accent else ink, dark, state.repeat)
+                    setImageViewResource(R.id.widget_favorite,
+                        if (state.favorite) R.drawable.ic_widget_favorite else R.drawable.ic_widget_favorite_outline)
+                    control(context, R.id.widget_favorite, ACTION_FAVORITE, state.video != null, if (state.favorite) colors.accent else ink, darkControls, state.favorite)
+                    control(context, R.id.widget_repeat, ACTION_REPEAT, state.canRepeat, if (state.repeat) colors.accent else ink, darkControls, state.repeat)
                     setContentDescription(R.id.widget_favorite, context.getString(
                         if (state.favorite) R.string.playback_widget_unfavorite else R.string.playback_widget_favorite
                     ))
@@ -279,7 +284,7 @@ class PlaybackWidget : AppWidgetProvider() {
                     setTextColor(R.id.widget_next_title, ink)
                     setTextColor(R.id.widget_next_artist, muted)
                     setInt(R.id.widget_up_next, "setBackgroundResource",
-                        if (dark) R.drawable.widget_queue_surface_dark else R.drawable.widget_queue_surface)
+                        if (darkControls) R.drawable.widget_queue_surface_dark else R.drawable.widget_queue_surface)
                     setTextColor(R.id.widget_open_queue, muted)
                     setTextViewText(R.id.widget_open_queue, context.getString(
                         if (plan.expandedQueueLabel) R.string.playback_widget_open_queue else R.string.playback_widget_queue_short
@@ -307,12 +312,11 @@ class PlaybackWidget : AppWidgetProvider() {
             ink: Int, dark: Boolean, active: Boolean = false) {
             setOnClickPendingIntent(id, if (enabled) command(context, action) else null)
             setInt(id, "setColorFilter", ink)
-            setInt(id, "setImageAlpha", if (enabled) 255 else 106)
+            setInt(id, "setImageAlpha", if (enabled) 255 else 102)
             setInt(id, "setBackgroundResource", when {
-                dark && active -> R.drawable.widget_orb_dark
-                active -> R.drawable.widget_orb
-                dark -> R.drawable.widget_button_dark
-                else -> R.drawable.widget_button
+                dark && active -> R.drawable.widget_button_dark
+                active -> R.drawable.widget_button
+                else -> R.drawable.widget_icon_touch
             })
         }
 

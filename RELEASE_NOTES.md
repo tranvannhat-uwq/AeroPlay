@@ -1,3 +1,9 @@
+AeroPlay 2.2.12
+
+- Thiết kế lại widget 2×2, 4×2 và 4×4 với mặt kính bán trong suốt, viền phản sáng nhẹ và bố cục thoáng hơn.
+- Chế độ tự động điều chỉnh màu chữ theo màu hình nền. Có thể chọn Pearl Glass Light, Neon Glass Dark hoặc theo giao diện hệ thống trong Cài đặt → Giao diện widget.
+- Làm nổi bật nút phát và tạm dừng, giữ vùng chạm rộng cho bài trước và bài sau, đồng thời bỏ khung nền riêng của mục Tiếp theo.
+
 AeroPlay 2.2.11
 
 - Chuyển từ video sang Chỉ âm thanh nhanh hơn: giữ luồng đang phát và phần tiếng đã tải, kể cả khi bật tiết kiệm dữ liệu.

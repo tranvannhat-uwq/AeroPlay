@@ -1,7 +1,10 @@
 package com.aeroplay.app
 
 import android.app.Application
+import android.app.WallpaperManager
 import android.content.res.Configuration
+import android.os.Build
+import android.os.Handler
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
@@ -50,6 +53,13 @@ class AeroPlayApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        if (Build.VERSION.SDK_INT >= 27) {
+            runCatching {
+                WallpaperManager.getInstance(this).addOnColorsChangedListener({ _, which ->
+                    if (which and WallpaperManager.FLAG_SYSTEM != 0) PlaybackWidget.redraw(this)
+                }, Handler(mainLooper))
+            }
+        }
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             runCatching { youtubeAccountRepository.pruneExpiredApiData() }
         }

@@ -67,6 +67,16 @@ class PlaybackWidgetSizeTest {
         }
     }
 
+    @Test fun customPearlGlassUsesLightTextOnDarkWallpaperWithoutChangingOpacity() {
+        val wallpaper = 0xFF102036.toInt()
+        val appearance = WidgetAppearance(opacity = 14, customOpacity = true)
+        val theme = AdaptiveWidgetColorScheme.create(dark = false, appearance = appearance, wallpaper = wallpaper)
+        assertTrue(AdaptiveWidgetColorScheme.prefersDarkGlass(wallpaper))
+        assertFalse(theme.dark)
+        assertTrue(theme.lightInk)
+        assertEquals(appearance.fillAlpha, theme.guardedAlpha)
+    }
+
     @Test fun narrowAndLargeFontHostsTrimSupplementaryContent() {
         assertFalse(WidgetLayoutPlan(268, 280, 1f).secondaryControls)
         assertTrue(WidgetLayoutPlan(290, 290, 1f).secondaryControls)

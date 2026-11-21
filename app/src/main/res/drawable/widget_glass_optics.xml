@@ -2,22 +2,22 @@
     <item>
         <shape>
             <corners android:radius="26dp" />
-            <gradient android:type="radial" android:centerX="0.02" android:centerY="0.76" android:gradientRadius="85dp"
-                android:startColor="#6696F9F3" android:endColor="#0096F9F3" />
+            <gradient android:type="radial" android:centerX="0.04" android:centerY="0.86" android:gradientRadius="132dp"
+                android:startColor="#584EEBDD" android:endColor="#004EEBDD" />
         </shape>
     </item>
     <item>
         <shape>
             <corners android:radius="26dp" />
-            <gradient android:type="radial" android:centerX="0.99" android:centerY="0.86" android:gradientRadius="91dp"
-                android:startColor="#69D5A5FF" android:endColor="#00D5A5FF" />
+            <gradient android:type="radial" android:centerX="0.99" android:centerY="0.94" android:gradientRadius="113dp"
+                android:startColor="#59C391FF" android:endColor="#00C391FF" />
         </shape>
     </item>
     <item>
         <shape>
             <corners android:radius="26dp" />
-            <gradient android:type="radial" android:centerX="0.16" android:centerY="0.01" android:gradientRadius="69dp"
-                android:startColor="#78FFFFFF" android:endColor="#00FFFFFF" />
+            <gradient android:type="radial" android:centerX="0.18" android:centerY="0.01" android:gradientRadius="112dp"
+                android:startColor="#5CFFFFFF" android:endColor="#00FFFFFF" />
         </shape>
     </item>
 </layer-list>

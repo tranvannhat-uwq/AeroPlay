@@ -9,7 +9,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="10dp">
+        android:padding="12dp">
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -17,39 +17,40 @@
             android:id="@+id/widget_heading"
             android:gravity="center_vertical">
             <ImageView
-                android:layout_width="21dp"
-                android:layout_height="21dp"
+                android:layout_width="19dp"
+                android:layout_height="19dp"
                 android:id="@+id/widget_logo"
                 android:src="@mipmap/ic_launcher" />
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:id="@+id/widget_brand"
-                android:textSize="15sp"
+                android:textSize="12sp"
+                android:includeFontPadding="false"
                 android:textColor="@color/widget_ink"
                 android:maxLines="1"
                 android:ellipsize="end"
                 android:layout_marginStart="5dp"
                 android:text="@string/app_name"
-                android:textFontWeight="600"                android:fontFamily="sans-serif-medium" />
+                android:fontFamily="sans-serif-medium" />
         </LinearLayout>
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="0.55" />
+            android:layout_weight="0.22" />
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_marginTop="4dp">
+            android:layout_marginTop="9dp">
             <FrameLayout
                 android:id="@+id/widget_art_frame"
                 android:layout_width="86dp"
                 android:layout_height="86dp"
                 android:background="@drawable/widget_art_frame"
                 android:clipToOutline="true"
-                android:padding="2dp">
+                android:padding="1dp">
                 <ImageView
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
@@ -64,22 +65,25 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:layout_weight="1"
-                android:layout_marginStart="10dp">
+                android:layout_marginStart="12dp">
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:id="@+id/widget_track"
-                    android:textSize="19sp"
+                    android:textSize="18sp"
+                    android:includeFontPadding="false"
                     android:textColor="@color/widget_ink"
                     android:maxLines="1"
                     android:ellipsize="end"
-                    android:textFontWeight="600"                    android:fontFamily="sans-serif-medium"
+                    android:fontFamily="sans-serif-medium"
                     android:text="@string/playback_widget_idle" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:id="@+id/widget_artist"
-                    android:textSize="15sp"
+                    android:textSize="13sp"
+                    android:includeFontPadding="false"
+                    android:layout_marginTop="3dp"
                     android:textColor="@color/widget_secondary"
                     android:maxLines="1"
                     android:ellipsize="end" />
@@ -88,6 +92,7 @@
                     android:layout_height="wrap_content"
                     android:id="@+id/widget_quality"
                     android:textSize="11sp"
+                    android:includeFontPadding="false"
                     android:textColor="@color/widget_ink"
                     android:maxLines="1"
                     android:ellipsize="end"
@@ -107,7 +112,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:id="@+id/widget_elapsed"
-                android:textSize="12sp"
+                android:textSize="11sp"
+                android:includeFontPadding="false"
                 android:textColor="@color/widget_secondary"
                 android:maxLines="1"
                 android:ellipsize="end" />
@@ -119,14 +125,19 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:id="@+id/widget_duration"
-                android:textSize="12sp"
+                android:textSize="11sp"
+                android:includeFontPadding="false"
                 android:textColor="@color/widget_secondary"
                 android:maxLines="1"
                 android:ellipsize="end" />
         </LinearLayout>
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="0.38" />
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="60dp"
+            android:layout_height="56dp"
             android:orientation="horizontal"
             android:gravity="center"
             android:layout_marginTop="2dp">
@@ -134,32 +145,32 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:id="@+id/widget_favorite"
-                android:src="@drawable/ic_widget_favorite"
-                android:padding="9dp"
+                android:src="@drawable/ic_widget_favorite_outline"
+                android:padding="13dp"
                 android:scaleType="fitCenter"
                 android:tint="@color/widget_ink"
-                android:background="@drawable/widget_button"
+                android:background="@drawable/widget_icon_touch"
                 android:contentDescription="@string/playback_widget_favorite" />
             <ImageView
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:id="@+id/widget_previous"
                 android:src="@drawable/ic_widget_previous"
-                android:padding="9dp"
+                android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:tint="@color/widget_ink"
-                android:background="@drawable/widget_button"
+                android:background="@drawable/widget_icon_touch"
                 android:contentDescription="@string/playback_widget_previous"
                 android:layout_marginHorizontal="2dp" />
             <ImageView
-                android:layout_width="60dp"
-                android:layout_height="60dp"
+                android:layout_width="56dp"
+                android:layout_height="56dp"
                 android:id="@+id/widget_toggle"
                 android:src="@drawable/ic_widget_play"
                 android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:tint="@color/widget_ink"
-                android:background="@drawable/widget_orb"
+                android:background="@drawable/widget_orb_preview"
                 android:contentDescription="@string/playback_widget_play"
                 android:layout_marginHorizontal="3dp" />
             <ImageView
@@ -167,10 +178,10 @@
                 android:layout_height="48dp"
                 android:id="@+id/widget_next"
                 android:src="@drawable/ic_widget_next"
-                android:padding="9dp"
+                android:padding="12dp"
                 android:scaleType="fitCenter"
                 android:tint="@color/widget_ink"
-                android:background="@drawable/widget_button"
+                android:background="@drawable/widget_icon_touch"
                 android:contentDescription="@string/playback_widget_next"
                 android:layout_marginHorizontal="2dp" />
             <ImageView
@@ -178,23 +189,24 @@
                 android:layout_height="48dp"
                 android:id="@+id/widget_repeat"
                 android:src="@drawable/ic_widget_repeat"
-                android:padding="9dp"
+                android:padding="13dp"
                 android:scaleType="fitCenter"
                 android:tint="@color/widget_ink"
-                android:background="@drawable/widget_button"
+                android:background="@drawable/widget_icon_touch"
                 android:contentDescription="@string/playback_widget_repeat" />
         </LinearLayout>
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="0.65" />
+            android:layout_weight="0.40" />
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:id="@+id/widget_up_next"
-            android:paddingHorizontal="10dp"
-            android:paddingVertical="7dp"
+            android:minHeight="48dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="2dp"
             android:background="@drawable/widget_queue_surface"
             android:layout_marginTop="4dp">
             <LinearLayout
@@ -206,18 +218,20 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:id="@+id/widget_next_header"
-                    android:textSize="15sp"
+                    android:textSize="12sp"
+                    android:includeFontPadding="false"
                     android:textColor="@color/widget_ink"
                     android:maxLines="1"
                     android:ellipsize="end"
                     android:text="@string/playback_widget_up_next"
                     android:layout_weight="1"
-                    android:textFontWeight="600"                    android:fontFamily="sans-serif-medium" />
+                    android:fontFamily="sans-serif-medium" />
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:id="@+id/widget_open_queue"
-                    android:textSize="12sp"
+                    android:textSize="11sp"
+                    android:includeFontPadding="false"
                     android:textColor="@color/widget_secondary"
                     android:maxLines="1"
                     android:ellipsize="end"
@@ -229,13 +243,13 @@
                 android:orientation="horizontal"
                 android:id="@+id/widget_next_item"
                 android:gravity="center_vertical"
-                android:layout_marginTop="2dp">
+                android:layout_marginTop="5dp">
                 <FrameLayout
-                    android:layout_width="44dp"
+                    android:layout_width="34dp"
                     android:layout_height="34dp"
                     android:background="@drawable/widget_art_frame"
                     android:clipToOutline="true"
-                    android:padding="2dp">
+                    android:padding="1dp">
                     <ImageView
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
@@ -250,30 +264,28 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:layout_weight="1"
-                    android:layout_marginStart="6dp">
+                    android:layout_marginStart="8dp">
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:id="@+id/widget_next_title"
-                        android:textSize="14sp"
+                        android:textSize="13sp"
+                        android:includeFontPadding="false"
                         android:textColor="@color/widget_ink"
                         android:maxLines="1"
                         android:ellipsize="end"
-                        android:textFontWeight="600"                        android:fontFamily="sans-serif-medium" />
+                        android:fontFamily="sans-serif-medium" />
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:id="@+id/widget_next_artist"
-                        android:textSize="12sp"
+                        android:textSize="11sp"
+                        android:includeFontPadding="false"
                         android:textColor="@color/widget_secondary"
                         android:maxLines="1"
                         android:ellipsize="end" />
                 </LinearLayout>
             </LinearLayout>
         </LinearLayout>
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="0.45" />
     </LinearLayout>
 </FrameLayout>

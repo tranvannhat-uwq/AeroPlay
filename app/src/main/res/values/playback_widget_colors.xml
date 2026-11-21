@@ -1,2 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources><color name="widget_ink">#142558</color><color name="widget_secondary">#435579</color><color name="widget_track_line">#4493A7CF</color></resources>
+<resources>
+    <color name="widget_ink">#0B172A</color>
+    <color name="widget_secondary">#253751</color>
+    <color name="widget_track_line">#4493A7CF</color>
+    <item name="widget_orb_preview" type="drawable">@drawable/widget_orb</item>
+</resources>

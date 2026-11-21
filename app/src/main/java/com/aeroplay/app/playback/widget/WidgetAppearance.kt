@@ -7,7 +7,8 @@ import kotlin.math.roundToInt
 internal enum class WidgetGlassMode(val label: String) {
     PEARL("Pearl Glass Light"),
     NEON("Neon Glass Dark"),
-    ADAPTIVE("Tự động theo hệ thống")
+    ADAPTIVE("Tự động theo hình nền"),
+    SYSTEM("Theo sáng/tối hệ thống")
 }
 
 internal enum class WidgetAccent(val label: String) {
@@ -23,11 +24,15 @@ internal data class WidgetAppearance(
 ) {
     val fillAlpha: Int get() = (opacity.coerceIn(0, 100) * 255 / 100.0).roundToInt()
 
-    fun isDark(context: Context): Boolean = when (mode) {
-        WidgetGlassMode.PEARL -> false
-        WidgetGlassMode.NEON -> true
-        WidgetGlassMode.ADAPTIVE -> (context.resources.configuration.uiMode and
+    fun isDark(context: Context, wallpaper: Int?): Boolean {
+        val systemDark = (context.resources.configuration.uiMode and
             Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        return when (mode) {
+            WidgetGlassMode.PEARL -> false
+            WidgetGlassMode.NEON -> true
+            WidgetGlassMode.ADAPTIVE -> wallpaper?.let(AdaptiveWidgetColorScheme::prefersDarkGlass) ?: systemDark
+            WidgetGlassMode.SYSTEM -> systemDark
+        }
     }
 
     fun save(context: Context) {
