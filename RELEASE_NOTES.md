@@ -1,3 +1,8 @@
+AeroPlay 2.2.13
+
+- Tăng mục tiêu tải trước lên khoảng 2 phút 30 giây khi xem video hoặc nghe ở chế độ Chỉ âm thanh. Lượng tải trước thực tế tùy nguồn, tốc độ mạng và giới hạn bộ nhớ.
+- Bắt đầu phát sau khi đệm khoảng 4 giây nội dung. Khi mạng chậm làm cạn bộ đệm, app đệm lại khoảng 9 giây nội dung để giảm tình trạng phát ngắt quãng.
+
 AeroPlay 2.2.12
 
 - Thiết kế lại widget 2×2, 4×2 và 4×4 với mặt kính bán trong suốt, viền phản sáng nhẹ và bố cục thoáng hơn.

@@ -1,5 +1,6 @@
 package com.aeroplay.app.playback.service
 
+import android.app.ActivityManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.net.Uri
@@ -18,6 +19,7 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
@@ -145,7 +147,20 @@ class AeroPlayMediaService : MediaLibraryService() {
             .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
             .build()
 
+        val isLowRamDevice = getSystemService(ActivityManager::class.java)?.isLowRamDevice == true
+        val loadControl = DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 120_000,
+                /* maxBufferMs = */ 150_000,
+                /* bufferForPlaybackMs = */ 4_000,
+                /* bufferForPlaybackAfterRebufferMs = */ 9_000
+            )
+            // Keep high-bitrate video from filling RAM while building the longer reserve.
+            .setTargetBufferBytes((if (isLowRamDevice) 32 else 64) * 1024 * 1024)
+            .build()
+
         val exoPlayer = ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
             .setMediaSourceFactory(adaptiveMergingMediaSourceFactory)
             .setAudioAttributes(audioAttributes, true)
             .setHandleAudioBecomingNoisy(true)
